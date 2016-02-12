@@ -1,8 +1,16 @@
 #include <stdio.h>
-#include <sys/ipc.h>
-#include <sys/msg.h>
+#include <stdlib.h>
+#include <unistd.h>
+
 #include <fcntl.h>
 #include <math.h>
+
+#include <sys/wait.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
+#include <sys/msg.h>
+#include <sys/shm.h>
+
 
 /*typy komunikatow w kolejkach KOM_GR1 i KOM_GR2*/
 #define ATAK                1
@@ -31,11 +39,34 @@
 #define GR1_QUEUE_KEY 1
 #define GR2_QUEUE_KEY 2
 
-/* inne zmienne globalne */
+/* key semaforow */
+#define SEMAPHORE_KEY 34
+#define SEMAPHORE_QUANTITY 3
+
+#define SHARED_MEMORY_SEMAPHORE_NUM 0
+#define SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM 1
+#define SHARED_MEMORY_PLAYER2_SEMAPHORE_NUM 2
+
+#define SHARED_MEMORY_SEMAPHORE_INIT 1
+#define SHARED_MEMORY_PLAYER1_SEMAPHORE_INIT 1
+#define SHARED_MEMORY_PLAYER2_SEMAPHORE_INIT 1
+
+/* key pamieci wspoldzielonej */
+#define SHARED_MEMORY_PLAYER1_KEY 21
+#define SHARED_MEMORY_PLAYER2_KEY 37
+
+/* consty dotycace dodawania surowcow */
 
 #define INIT_STOCKS_VALUE 300
 #define INIT_STOCKS_ADD 50
 #define WORKER_STOCKS_ADD 5
+
+/* inne consty */
+
+#define ATTACK_DURATION 5
+#define ATTACK_CODE 1
+#define DEFENSE_CODE 1
+
 
 
 /* jednostki */
@@ -72,6 +103,8 @@
 
 /* struktury */
 ///////////////////////////////////////////////////////////////////////////////
+
+static struct sembuf buf;
 
 typedef struct Message{
     long mtype;
@@ -114,49 +147,111 @@ typedef struct Init_message {
     struct Init_data_struct init_data;
 }Init_message;
 
+typedef struct Shared_memory_struct{
+    Game_data_struct player1;
+    Game_data_struct player2;
+}Shared_memory_struct;
+
 /* funkcje */
 ///////////////////////////////////////////////////////////////////////////////
 
 /* funkcje pomocnicze */
 ///////////////////////////////////////
-void show_player(Game_data_struct player){
+void show_player(Game_data_struct *player){
 
     printf("\n");
     printf("Statystyki gracza\n\n");
-    printf("Lekka piechota: %d\n",player.light_infantry);
-    printf("Ciezka piechota: %d\n",player.heavy_infantry);
-    printf("Jazda: %d\n",player.cavalry);
-    printf("Robotnicy: %d\n",player.workers);
-    printf("Surowce: %d\n",player.stocks);
-    printf("Punkty zwyciestwa: %d\n",player.victory_points);
+    printf("Lekka piechota: %d\n",player->light_infantry);
+    printf("Ciezka piechota: %d\n",player->heavy_infantry);
+    printf("Jazda: %d\n",player->cavalry);
+    printf("Robotnicy: %d\n",player->workers);
+    printf("Surowce: %d\n",player->stocks);
+    printf("Punkty zwyciestwa: %d\n",player->victory_points);
     printf("\n");
 }
+
+
+void semaphore_up(int semid,int semnum){
+    buf.sem_num=semnum;
+    buf.sem_op=1;
+    buf.sem_flg=0;
+    if(semop(semid,&buf,1)==-1){
+    perror("Podnoszenie semafora");
+    exit(1);
+    }
+}
+
+void semaphore_down(int semid,int semnum){
+    buf.sem_num=semnum;
+    buf.sem_op=-1;
+    buf.sem_flg=0;
+    if(semop(semid,&buf,1)==-1){
+        perror("Opuszczenie semafora");
+        exit(1);
+    }
+}
+
 
 /* funkcje rozgrywki */
 ///////////////////////////////////////
 
 
-void add_stock(Game_data_struct &player){
-    player.stocks+=INIT_STOCKS_ADD+(WORKER_STOCKS_ADD*player.workers);
+void add_stock(Game_data_struct *player){
+    player->stocks+=INIT_STOCKS_ADD+(WORKER_STOCKS_ADD*(player->workers));
 }
 
-void add_stocks(Game_data_struct &player1,Game_data_struct &player2){
+void add_stocks(Game_data_struct *player1,Game_data_struct *player2,int semaphore_id,int semnum){
+    semaphore_down(semaphore_id,semnum);
     add_stock(player1);
     add_stock(player2);
+    semaphore_up(semaphore_id,semnum);
 }
 
-int train(Game_data_struct &player,Game_data_struct train_list){
+int train(Game_data_struct *player,Game_data_struct train_list,int semaphore_id,int semaphore_num){
 
+    int i;
     int train_cost=(LIGHT_INFANTRY_PRICE*train_list.light_infantry)+(HEAVY_INFANTRY_PRICE*train_list.heavy_infantry)+(CAVALRY_PRICE*train_list.cavalry)+(WORKER_PRICE*train_list.workers);
-    if(train_cost>player.stocks) return -1;
+    if(train_cost>player->stocks)
+    {
+
+        return -1;
+    }
     else{
-        player.stocks-=train_cost;
 
-        player.light_infantry+=train_list.light_infantry;
-        player.heavy_infantry+=train_list.heavy_infantry;
-        player.cavalry+=train_list.cavalry;
-        player.workers+=train_list.workers;
+        player->stocks-=train_cost;
 
+        for(i=0;i<train_list.light_infantry;i++){
+            sleep(LIGHT_INFANTRY_PRODUCTION_TIME);
+
+            semaphore_down(semaphore_id,semaphore_num);
+            player->light_infantry++;
+            semaphore_up(semaphore_id,semaphore_num);
+        }
+
+        for(i=0;i<train_list.heavy_infantry;i++){
+            sleep(HEAVY_INFANTRY_PRODUCTION_TIME);
+
+            semaphore_down(semaphore_id,semaphore_num);
+            player->heavy_infantry++;
+            semaphore_up(semaphore_id,semaphore_num);
+        }
+
+        for(i=0;i<train_list.cavalry;i++){
+            sleep(CAVALRY_PRODUCTION_TIME);
+
+            semaphore_down(semaphore_id,semaphore_num);
+            player->cavalry++;
+            semaphore_up(semaphore_id,semaphore_num);
+        }
+
+        for(i=0;i<train_list.workers;i++){
+            sleep(WORKER_PRODUCTION_TIME);
+
+            semaphore_down(semaphore_id,semaphore_num);
+            player->workers++;
+            semaphore_up(semaphore_id,semaphore_num);
+
+        }
         return 1;
     }
 }
@@ -164,44 +259,46 @@ int train(Game_data_struct &player,Game_data_struct train_list){
 /* funkcje walki */
 //////////////////////////////////////////////////
 
-int calculate_attack(Game_data_struct units_list){
+int calculate_attack(Game_data_struct *units_list){
 
     int attack;
 
-    attack=(units_list.light_infantry*LIGHT_INFANTRY_DAMAGE)+(units_list.heavy_infantry*HEAVY_INFANTRY_DAMAGE)+(units_list.cavalry*CAVALRY_DAMAGE)+(units_list.workers*WORKER_DAMAGE);
+    attack=(units_list->light_infantry*LIGHT_INFANTRY_DAMAGE)+(units_list->heavy_infantry*HEAVY_INFANTRY_DAMAGE)+(units_list->cavalry*CAVALRY_DAMAGE)+(units_list->workers*WORKER_DAMAGE);
 
     return attack;
 }
 
-int calculate_defense(Game_data_struct units_list)
+int calculate_defense(Game_data_struct *units_list)
 {
     int defense;
 
-    defense=(units_list.light_infantry*LIGHT_INFANTRY_DEFENSE)+(units_list.heavy_infantry*HEAVY_INFANTRY_DEFENSE)+(units_list.cavalry*CAVALRY_DEFENSE)+(units_list.workers*WORKER_DEFENSE);
+    defense=(units_list->light_infantry*LIGHT_INFANTRY_DEFENSE)+(units_list->heavy_infantry*HEAVY_INFANTRY_DEFENSE)+(units_list->cavalry*CAVALRY_DEFENSE)+(units_list->workers*WORKER_DEFENSE);
 
     return defense;
 }
 
 
 
-void calculate_casualties(Game_data_struct &player,int attack,int defense){
+void calculate_casualties(Game_data_struct *player,int attack,int defense){
 
-    double ratio=double(attack)/double(defense);
-    //printf("Ratio: %f",ratio*player.light_infantry);
+    double ratio=(double)attack/(double)defense;
 
-    player.light_infantry-=floor(player.light_infantry*ratio);
-    player.heavy_infantry-=floor(player.heavy_infantry*ratio);
-    player.cavalry-=floor(player.cavalry*ratio);
+
+    player->light_infantry-=floor(player->light_infantry*ratio);
+    player->heavy_infantry-=floor(player->heavy_infantry*ratio);
+    player->cavalry-=floor(player->cavalry*ratio);
 
 }
 
-void kill_them_all(Game_data_struct &player){
-    player.light_infantry=0;
-    player.heavy_infantry=0;
-    player.cavalry=0;
+void kill_them_all(Game_data_struct *player,int code){
+    player->light_infantry=0;
+    player->heavy_infantry=0;
+    player->cavalry=0;
+    if(code==ATTACK_CODE)
+    player->victory_points++;
 }
 
-void duel(Game_data_struct player1,Game_data_struct &player2){
+void duel(Game_data_struct *player1,Game_data_struct *player2,int code){
 
     int attack;
     int defense;
@@ -210,7 +307,7 @@ void duel(Game_data_struct player1,Game_data_struct &player2){
     defense=calculate_defense(player2);
 
     if(attack>defense){
-        kill_them_all(player2);
+        kill_them_all(player2,code);
     }
     else{
         calculate_casualties(player2,attack,defense);
@@ -221,78 +318,297 @@ void duel(Game_data_struct player1,Game_data_struct &player2){
 
 }
 
-void battle(Game_data_struct &player1,Game_data_struct &player2){
+void battle(Game_data_struct *player1,Game_data_struct *player2,int semaphore_id,int semnum){
+
+    sleep(ATTACK_DURATION);
+
+    semaphore_down(semaphore_id,semnum);
 
     Game_data_struct temp_player1,temp_player2;
+    Game_data_struct *wsk_temp_player2=&temp_player2;
 
-    //temp_player1=player1;
-    temp_player2=player2;
+    temp_player2=*player2;
 
-    duel(player1,player2);
 
-    /*
-    show_player(player1);
-    show_player(player2);
-    */
+    duel(player1,player2,ATTACK_CODE);
 
-    duel(temp_player2,player1);
+    duel(wsk_temp_player2,player1,DEFENSE_CODE);
+
+    semaphore_up(semaphore_id,semnum);
 
 }
 
 /* funkcje inicjalizujace */
 ///////////////////////////////////////////
-void init_clear(Game_data_struct &player){
+void init_clear(Game_data_struct *player,int semaphore_id,int semnum){
 
+    semaphore_down(semaphore_id,semnum);
 
-    player.light_infantry=0;
-    player.heavy_infantry=0;
-    player.cavalry=0;
-    player.workers=0;
-    player.stocks=0;
-    player.victory_points=0;
-    player.winner=0;
+    player->light_infantry=0;
+    player->heavy_infantry=0;
+    player->cavalry=0;
+    player->workers=0;
+    player->stocks=0;
+    player->victory_points=0;
+    player->winner=0;
+
+    semaphore_up(semaphore_id,semnum);
 
 }
 
-void init(){
+void setval(Game_data_struct *player,int semaphore_id,int semnum,int light_infantry,int heavy_infantry,int cavalry,int workers, int stocks, int victory_points,int winner){
+
+    semaphore_down(semaphore_id,semnum);
+
+    player->light_infantry=light_infantry;
+    player->heavy_infantry=heavy_infantry;
+    player->cavalry=cavalry;
+    player->workers=workers;
+    player->stocks=stocks;
+    player->victory_points=victory_points;
+    player->winner=winner;
+
+    semaphore_up(semaphore_id,semnum);
+
+}
+void init_player(Game_data_struct *player,int semaphore_id,int semnum){
+
+    semaphore_down(semaphore_id,semnum);
+
+    player->light_infantry=0;
+    player->heavy_infantry=0;
+    player->cavalry=0;
+    player->workers=0;
+    player->stocks=INIT_STOCKS_VALUE;
+    player->victory_points=0;
+    player->winner=0;
+
+    semaphore_up(semaphore_id,semnum);
+
+}
+
+int check_army(Game_data_struct *player,Game_data_struct army_list){
+    if(army_list.light_infantry<=player->light_infantry && army_list.heavy_infantry<=player->heavy_infantry && army_list.cavalry<=player->cavalry && army_list.light_infantry+army_list.heavy_infantry+army_list.cavalry>0)
+        return 1;
+    else
+        return -1;
 
 }
 
 int main(int args, char* argv[]){
 
-    /*
-    int init_queue=msgget(INIT_QUEUE_KEY,IPC_CREAT|0664);
 
 
-    Message message;
-    message.mtype=ROZPOCZNIJ;
-    message.liczba=2137;
+    /* utworzenie i inicjalizacja semaforow */
 
-    msgsnd(init_queue,&message,4,0);
+    int shared_memory_semaphore_id=semget(SEMAPHORE_KEY,SEMAPHORE_QUANTITY,IPC_CREAT|0664);
+    if(shared_memory_semaphore_id==-1){
+        perror("Blad przy tworzeniu semafora");
+        exit(1);
+    }
 
-     */
+    if(semctl(shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,SETVAL,SHARED_MEMORY_SEMAPHORE_INIT)==-1){
+        perror("Blad przy inicjalizacji semafora 0 pamieci wspoldzielonej");
+        exit(1);
+    }
 
-    Game_data_struct player1,player2,train_list;
+    if(semctl(shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM,SETVAL,SHARED_MEMORY_PLAYER1_SEMAPHORE_INIT)==-1){
+        perror("Blad przy inicjalizacji semafora 0 pamieci wspoldzielonej");
+        exit(1);
+    }
 
-    init_clear(player1);
-    init_clear(player2);
-    init_clear(train_list);
+    if(semctl(shared_memory_semaphore_id,SHARED_MEMORY_PLAYER2_SEMAPHORE_NUM,SETVAL,SHARED_MEMORY_PLAYER2_SEMAPHORE_INIT)==-1){
+        perror("Blad przy inicjalizacji semafora 1 pamieci wspoldzielonej");
+        exit(1);
+    }
 
-    player1.light_infantry=2;
-    player1.heavy_infantry=7;
-    player1.cavalry=3;
-    player1.workers=2;
+    /* utworzenie i przylaczenie pamieci wspoldzielonej player1 */
 
-    player2.light_infantry=7;
-    player2.heavy_infantry=5;
-    player2.cavalry=3;
+    int SHARED_MEMORY_PLAYER1_ID=shmget(SHARED_MEMORY_PLAYER1_KEY,sizeof(Game_data_struct),IPC_CREAT|0664);
+    if(SHARED_MEMORY_PLAYER1_ID==-1){
+        perror("Blad przy tworzeniu pamieci wspoldzielonej player1");
+        exit(1);
+    }
+
+    Game_data_struct *player1=(Game_data_struct*)shmat(SHARED_MEMORY_PLAYER1_ID,NULL,0);
+    if(player1==NULL){
+        perror("Blad przy przylaczeniu pamieci wspoldzielonej player1");
+        exit(1);
+    }
+
+    /* utworzenie i przylaczenie pamieci wspoldzielonej player2 */
+
+    int SHARED_MEMORY_PLAYER2_ID=shmget(SHARED_MEMORY_PLAYER2_KEY,sizeof(Game_data_struct),IPC_CREAT|0664);
+    if(SHARED_MEMORY_PLAYER2_ID==-1){
+        perror("Blad przy tworzeniu pamieci wspoldzielonej player2");
+        exit(1);
+    }
+
+    Game_data_struct *player2=(Game_data_struct*)shmat(SHARED_MEMORY_PLAYER2_ID,NULL,0);
+    if(player2==NULL){
+        perror("Blad przy przylaczeniu pamieci wspoldzielonej player2");
+        exit(1);
+    }
+
+    /* utworzenie kolejki komunikatow init */
+
+    int init_queue_id=msgget(INIT_QUEUE_KEY,IPC_CREAT|0664);
+    if(init_queue_id==-1){
+        perror("Blad przy tworzeniu poczatkowej kolejki komunikatow");
+        exit(1);
+    }
+
+    /* utworzenie kolejki komunikatow gracza1 */
+
+
+
+
+
+    Game_data_struct train_list;
+    Game_data_struct *train_list_pointer=&train_list;
+
+    init_clear(player1,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
+    init_clear(player2,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
+    init_clear(train_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
+
+    setval(player1,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,2,7,3,2,5000,0,0);
+    setval(player2,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,7,5,3,0,0,0,0);
+
+
+    train_list.light_infantry=1;
+    train_list.cavalry=1;
+
+        int t=train(player1,train_list,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
+        printf("%d",t);
+
+    show_player(player1);
+    show_player(player2);
+
+
+
+
+
+    if(fork()==0){  //pobieranie surowcow
+        while(1){
+            semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
+            add_stocks(player1,player2,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
+            semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
+            sleep(1);
+            printf("Wyprodukowano surowce\n");
+        }
+
+    }
+    else{
+        if(fork()==0){
+
+            Game_data_struct battle_list;
+            //while(1){
+
+            semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
+
+            if(check_army(player1,battle_list)==1)
+            {
+                battle(player1,player2,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
+            }
+            else{
+                //wyslij BLEDNY_ATAK
+            }
+
+            semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
+
+            //}
+
+
+
+        }
+        else {
+            wait(NULL);
+
+        }
+
+    }
+
+    show_player(player1);
+    show_player(player2);
+
+
+    return 0;
+}
+
+/* pytania
+ * czy mozna pominac i nie zwracac zlego ataku
+Co gdy 0 ludzi atakuje, zero broni.
+*/
+
+
+/* smietnisko */
+
+/*
+   int init_queue=msgget(INIT_QUEUE_KEY,IPC_CREAT|0664);
+
+
+   Message message;
+   message.mtype=ROZPOCZNIJ;
+   message.liczba=2137;
+
+   msgsnd(init_queue,&message,4,0);
+
+    */
+
+/*
+Game_data_struct train_list;
+
+init_clear(player1);
+init_clear(player2);
+init_clear(train_list);
+
+player1.light_infantry=2;
+player1.heavy_infantry=7;
+player1.cavalry=3;
+player1.workers=2;
+
+player2.light_infantry=7;
+player2.heavy_infantry=5;
+player2.cavalry=3;
+
+
+
+show_player(player1);
+show_player(player2);
+
+add_stocks(player1,player2);
+add_stocks(player1,player2);
+
+show_player(player1);
+show_player(player2);
+
+train_list.light_infantry=1;
+int t=train(player1,train_list);
+printf("%d",t);
+
+
+show_player(player1);
+show_player(player2);
+ */
+
+/*
+    show_player(player1);
+    show_player(player2);
+
+    player1->light_infantry=2;
+    player1->heavy_infantry=7;
+    player1->cavalry=3;
+    player1->workers=2;
+
+    player2->light_infantry=7;
+    player2->heavy_infantry=5;
+    player2->cavalry=3;
 
 
 
     show_player(player1);
     show_player(player2);
 
-    add_stocks(player1,player2);
     add_stocks(player1,player2);
 
     show_player(player1);
@@ -305,15 +621,4 @@ int main(int args, char* argv[]){
 
     show_player(player1);
     show_player(player2);
-
-
-
-
-    return 0;
-}
-
-/* pytania
-Czy mozna skompilowac g++
-Czy trzeba zabezpieczac przed atakiem robotnikow czy mozna pominac i nie zwracac zlego ataku
-Co gdy 0 ludzi atakuje, zero broni.
-*/
+     */
