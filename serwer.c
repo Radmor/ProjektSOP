@@ -40,7 +40,7 @@
 #define GR2_QUEUE_KEY 2
 
 /* key semaforow */
-#define SEMAPHORE_KEY 34
+#define SEMAPHORE_KEY 67
 #define SEMAPHORE_QUANTITY 3
 
 #define SHARED_MEMORY_SEMAPHORE_NUM 0
@@ -176,8 +176,8 @@ void semaphore_up(int semid,int semnum){
     buf.sem_op=1;
     buf.sem_flg=0;
     if(semop(semid,&buf,1)==-1){
-    perror("Podnoszenie semafora");
-    exit(1);
+        perror("Podnoszenie semafora");
+        exit(1);
     }
 }
 
@@ -295,7 +295,7 @@ void kill_them_all(Game_data_struct *player,int code){
     player->heavy_infantry=0;
     player->cavalry=0;
     if(code==ATTACK_CODE)
-    player->victory_points++;
+        player->victory_points++;
 }
 
 void duel(Game_data_struct *player1,Game_data_struct *player2,int code){
@@ -336,6 +336,49 @@ void battle(Game_data_struct *player1,Game_data_struct *player2,int semaphore_id
 
     semaphore_up(semaphore_id,semnum);
 
+}
+
+
+void sendtroops(Game_data_struct *attacker,Game_data_struct *battle_list){
+    attacker->light_infantry-=battle_list->light_infantry;
+    attacker->heavy_infantry-=battle_list->heavy_infantry;
+    attacker->cavalry-=battle_list->cavalry;
+}
+
+void bringboysbackhome(Game_data_struct *attacker,Game_data_struct *battle_list){
+    attacker->light_infantry+=battle_list->light_infantry;
+    attacker->heavy_infantry+=battle_list->heavy_infantry;
+    attacker->cavalry+=battle_list->cavalry;
+}
+
+int check_army(Game_data_struct *player,Game_data_struct *battle_list){
+    if(battle_list->light_infantry<=player->light_infantry && battle_list->heavy_infantry<=player->heavy_infantry && battle_list->cavalry<=player->cavalry && battle_list->light_infantry+battle_list->heavy_infantry+battle_list->cavalry>0)
+        return 1;
+    else
+        return -1;
+
+}
+
+int war(Game_data_struct *attacker,Game_data_struct *defenser,Game_data_struct *battle_list,int semaphore_id,int semnum){
+
+    semaphore_down(semaphore_id,semnum);
+    if(check_army(attacker,battle_list)==-1){
+        semaphore_up(semaphore_id,semnum);
+        return -1;
+    }
+    else{
+
+        sendtroops(attacker,battle_list);
+        semaphore_up(semaphore_id,semnum);
+
+        battle(battle_list,defenser,semaphore_id,semnum);
+
+        semaphore_down(semaphore_id,semnum);
+        bringboysbackhome(attacker,battle_list);
+        semaphore_up(semaphore_id,semnum);
+
+        return 1;
+    }
 }
 
 /* funkcje inicjalizujace */
@@ -387,13 +430,6 @@ void init_player(Game_data_struct *player,int semaphore_id,int semnum){
 
 }
 
-int check_army(Game_data_struct *player,Game_data_struct army_list){
-    if(army_list.light_infantry<=player->light_infantry && army_list.heavy_infantry<=player->heavy_infantry && army_list.cavalry<=player->cavalry && army_list.light_infantry+army_list.heavy_infantry+army_list.cavalry>0)
-        return 1;
-    else
-        return -1;
-
-}
 
 int main(int args, char* argv[]){
 
@@ -474,15 +510,23 @@ int main(int args, char* argv[]){
     setval(player1,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,2,7,3,2,5000,0,0);
     setval(player2,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,7,5,3,0,0,0,0);
 
+    printf("PO INICJALIZACJI\n");
 
-    train_list.light_infantry=1;
+    show_player(player1);
+    show_player(player2);
+
+
+    /*train_list.light_infantry=1;
     train_list.cavalry=1;
 
         int t=train(player1,train_list,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
         printf("%d",t);
 
+    printf("PO WYPRODUKOWANIU JEDNOSTEK\n");
+
     show_player(player1);
     show_player(player2);
+     */
 
 
 
@@ -494,27 +538,31 @@ int main(int args, char* argv[]){
             add_stocks(player1,player2,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
             semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
             sleep(1);
-            printf("Wyprodukowano surowce\n");
+            //printf("Wyprodukowano surowce\n");
         }
 
     }
     else{
-        if(fork()==0){
+
+        if(fork()==0){ /* ATAKI OD GRACZA 1 */
 
             Game_data_struct battle_list;
+            Game_data_struct *battle_list_pointer=&battle_list;
+
+            setval(battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,2,7,3,0,0,0,0);
+
+
             //while(1){
 
-            semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
+            //czekaj na wiadomosc
+            //odbierz wiadomosc
+            //battle_list=message.game_data;
 
-            if(check_army(player1,battle_list)==1)
-            {
-                battle(player1,player2,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
-            }
-            else{
-                //wyslij BLEDNY_ATAK
-            }
 
-            semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
+            if(war(player1,player2,battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM)==-1){
+                //wyslij Bledny atak
+                printf("DUPKA");
+            }
 
             //}
 
@@ -522,14 +570,16 @@ int main(int args, char* argv[]){
 
         }
         else {
-            wait(NULL);
+                wait(NULL);
+
+                printf("PO BITWIE\n");
+
+                show_player(player1);
+                show_player(player2);
 
         }
 
     }
-
-    show_player(player1);
-    show_player(player2);
 
 
     return 0;
