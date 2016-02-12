@@ -561,7 +561,6 @@ int main(int args, char* argv[]){
 
             if(war(player1,player2,battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM)==-1){
                 //wyslij Bledny atak
-                printf("DUPKA");
             }
 
             //}
