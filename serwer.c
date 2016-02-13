@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <time.h>
 
 #include <fcntl.h>
 #include <math.h>
@@ -66,6 +67,7 @@
 #define ATTACK_DURATION 5
 #define ATTACK_CODE 1
 #define DEFENSE_CODE 1
+#define INFO_FREQUENCY 2
 
 
 
@@ -106,12 +108,6 @@
 
 static struct sembuf buf;
 
-typedef struct Message{
-    long mtype;
-    int liczba;
-
-}Message;
-
 typedef struct Game_data_struct{
     int light_infantry;
     int heavy_infantry;
@@ -121,17 +117,7 @@ typedef struct Game_data_struct{
     int victory_points;
     int winner;
 }Game_data_struct;
-/*
-typedef struct Game_data_struct {
-    int lek_piech;
-    int cie_piech;
-    int jazda;
-    int robot;
-    int surowce;
-    int skut_ataki;
-    int wygral;
-}Game_data_struct;
-*/
+
 typedef struct Init_data_struct {
     int id_kolejki_kom;
     int id_gracza;
@@ -494,9 +480,42 @@ int main(int args, char* argv[]){
         exit(1);
     }
 
+
+    // INICJALIZACJA
+
+    Init_message init_message1;
+    Init_message init_message2;
+
+    msgrcv(init_queue_id,&init_message1,sizeof(init_message1.init_data),ROZPOCZNIJ,0);
+    msgrcv(init_queue_id,&init_message2,sizeof(init_message1.init_data),ROZPOCZNIJ,0);
+
+
     /* utworzenie kolejki komunikatow gracza1 */
 
+    int gr1_queue_id=msgget(GR1_QUEUE_KEY,IPC_CREAT|0664);
+    if(gr1_queue_id==-1){
+        perror("Blad przy tworzeniu kolejki gracza 1");
+        exit(1);
+    }
 
+    /* utworzenie kolejki komunikatow gracza2 */
+
+    int gr2_queue_id=msgget(GR2_QUEUE_KEY,IPC_CREAT|0664);
+    if(gr2_queue_id==-1){
+        perror("Blad przy tworzeniu kolejki gracza 2");
+        exit(1);
+    }
+
+    init_message1.mtype=AKCEPTUJ;
+    init_message1.init_data.id_kolejki_kom=gr1_queue_id;
+
+    init_message2.mtype=AKCEPTUJ;
+    init_message2.init_data.id_kolejki_kom=gr2_queue_id;
+
+    //wyslij wiadomosci
+
+    msgsnd(init_queue_id,&init_message1,sizeof(init_message1.init_data),0);
+    msgsnd(init_queue_id,&init_message2,sizeof(init_message2.init_data),0);
 
 
 
@@ -507,8 +526,8 @@ int main(int args, char* argv[]){
     init_clear(player2,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
     init_clear(train_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
 
-    setval(player1,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,2,7,3,2,5000,0,0);
-    setval(player2,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,7,5,3,0,0,0,0);
+    //setval(player1,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,2,7,3,2,5000,0,0);
+    //setval(player2,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,7,5,3,0,0,0,0);
 
     printf("PO INICJALIZACJI\n");
 
@@ -544,27 +563,44 @@ int main(int args, char* argv[]){
     }
     else{
 
-        if(fork()==0){ /* ATAKI OD GRACZA 1 */
+        if(fork()==0){
+            if(fork()==0){/* ATAKI OD GRACZA 1 */
+                Game_message message;
+                Game_message attack_failure_message;
+                attack_failure_message.mtype=BLEDNY_ATAK;
 
-            Game_data_struct battle_list;
-            Game_data_struct *battle_list_pointer=&battle_list;
+                Game_data_struct battle_list;
+                Game_data_struct *battle_list_pointer=&battle_list;
 
-            setval(battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,2,7,3,0,0,0,0);
-
-
-            //while(1){
-
-            //czekaj na wiadomosc
-            //odbierz wiadomosc
-            //battle_list=message.game_data;
+                //setval(battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,2,7,3,0,0,0,0);
 
 
-            if(war(player1,player2,battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM)==-1){
-                //wyslij Bledny atak
+                while(1){
+
+                    msgrcv(gr1_queue_id,&message,sizeof(message.game_data),ATAK,0);
+                    printf("TUTAJ");
+                    battle_list=message.game_data;
+
+                    if(war(player1,player2,battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM)==-1){
+                        msgsnd(gr1_queue_id,&attack_failure_message,sizeof(attack_failure_message.game_data),0);
+                    }
+
+                }
             }
+            else{
+                Game_message game_message;
+                game_message.mtype=STAN;
 
-            //}
+                while(1){
+                    sleep(INFO_FREQUENCY);
+                    game_message.game_data=*player1;
+                    msgsnd(gr1_queue_id,&game_message, sizeof(game_message.game_data),0);
+                    game_message.game_data=*player2;
+                    msgsnd(gr2_queue_id,&game_message, sizeof(game_message.game_data),0);
+                }
 
+
+            }
 
 
         }
