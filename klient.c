@@ -102,24 +102,12 @@ int main(int args, char argv[]){
 
     msgsnd(init_queue_id,&init_message,sizeof(init_message.init_data),0);
 
-    //printf("ZYJE");
-
     msgrcv(init_queue_id,&init_message, sizeof(init_message.init_data),AKCEPTUJ,0);
 
     int game_queue_id=init_message.init_data.id_kolejki_kom;
 
 
-
-    if(fork()==0){
-            while(1){
-                msgrcv(game_queue_id,&game_message, sizeof(game_message.game_data),STAN,0);
-                // clear the screen
-                //show_player(game_message.game_data);
-            }
-    }
-    else{
-
-        char decyzja;
+        int decyzja;
         Game_message train_message;
         train_message.mtype=TWORZ;
         Game_message battle_message;
@@ -129,50 +117,49 @@ int main(int args, char argv[]){
         Game_data_struct battle_list;
 
         int liczba;
+        char temp;
 
         while(1){
             printf("\033[2J\033[1;1H");
             printf("ID TWOJEJ KOLEJKI TO: %d\n",game_queue_id);
             printf("WYBIERZ AKCJE:\n1-trening jednostek\n2-atak\n\n");
-            scanf(" %c",&decyzja);
+            scanf("%d",&decyzja);
 
-            switch(decyzja){
-                case '1':
-                    printf("Wybierz liczbe jednostek lekkiej piechoty\n");
-                    scanf("%d",&train_list.light_infantry);
-                    printf("Wybierz liczbe jednostek ciezkiej piechoty\n");
-                    scanf("%d",&train_list.heavy_infantry);
-                    printf("Wybierz liczbe jednostek jazdy\n");
-                    scanf("%d",&train_list.cavalry);
-                    printf("Wybierz liczbe robotnikow\n");
-                    scanf(" %d",&train_list.workers);
+            if(decyzja==1) {
+                printf("Wybierz liczbe jednostek lekkiej piechoty\n");
+                scanf("%d",&train_list.light_infantry);
 
-                    train_message.game_data=train_list;
+                printf("Wybierz liczbe jednostek ciezkiej piechoty\n");
+                scanf("%d",&train_list.heavy_infantry);
 
-                    msgsnd(game_queue_id,&train_message, sizeof(train_message.game_data),0);
-                    printf("WYSLANO POLECENIE TRENINGU\n");
-                case '2':
-                    printf("Wybierz liczbe jednostek lekkiej piechoty\n");
-                    scanf("%d",&battle_list.light_infantry);
-                    printf("Wybierz liczbe jednostek ciezkiej piechoty\n");
-                    scanf("%d",&battle_list.heavy_infantry);
-                    printf("Wybierz liczbe jednostek jazdy\n");
-                    scanf("%d",&battle_list.cavalry);
+                printf("Wybierz liczbe jednostek jazdy\n");
+                scanf("%d",&train_list.cavalry);
 
-                    battle_message.game_data=battle_list;
+                printf("Wybierz liczbe robotnikow\n");
+                scanf("%d",&train_list.workers);
 
-                    msgsnd(game_queue_id,&battle_message, sizeof(battle_message.game_data),0);
-                    printf("WYSLANO POLECENIE ATAKU\n");
-                default:
-
-                    printf("NIE MA TAKIEJ KOMENDY\n");
-
-
+                train_message.game_data=train_list;
+                msgsnd(game_queue_id,&train_message, sizeof(train_message.game_data),0);
+                printf("WYSLANO POLECENIE TRENINGU\n");
             }
+            else if(decyzja==2) {
+                printf("Wybierz liczbe jednostek lekkiej piechoty\n");
+                scanf("%d",&battle_list.light_infantry);
+                printf("Wybierz liczbe jednostek ciezkiej piechoty\n");
+                scanf("%d",&battle_list.heavy_infantry);
+                printf("Wybierz liczbe jednostek jazdy\n");
+                scanf("%d",&battle_list.cavalry);
+
+                battle_message.game_data=battle_list;
+
+                msgsnd(game_queue_id,&battle_message, sizeof(battle_message.game_data),0);
+                printf("WYSLANO POLECENIE ATAKU\n");
+            }
+            else {
+                printf("NIE MA TAKIEJ KOMENDY\n");
+            }
+
         }
-
-
-    }
 
 
     return 0;

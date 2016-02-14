@@ -67,7 +67,7 @@
 #define ATTACK_DURATION 5
 #define ATTACK_CODE 1
 #define DEFENSE_CODE 1
-#define INFO_FREQUENCY 2
+#define INFO_FREQUENCY 4
 
 
 
@@ -242,6 +242,20 @@ int train(Game_data_struct *player,Game_data_struct train_list,int semaphore_id,
     }
 }
 
+
+/////////////////////////////////////////////////////
+
+void clear_list(Game_data_struct *player){
+
+    player->light_infantry=0;
+    player->heavy_infantry=0;
+    player->cavalry=0;
+    player->workers=0;
+    player->stocks=0;
+    player->victory_points=0;
+    player->winner=0;
+}
+
 /* funkcje walki */
 //////////////////////////////////////////////////
 
@@ -265,14 +279,18 @@ int calculate_defense(Game_data_struct *units_list)
 
 
 
-void calculate_casualties(Game_data_struct *player,int attack,int defense){
+void calculate_casualties(Game_data_struct *player,int attack,int defense,Game_data_struct *casualties_list){
 
     double ratio=(double)attack/(double)defense;
 
+    casualties_list->light_infantry=floor(player->light_infantry*ratio);
+    casualties_list->heavy_infantry=floor(player->heavy_infantry*ratio);
+    casualties_list->cavalry=floor(player->cavalry*ratio);
 
-    player->light_infantry-=floor(player->light_infantry*ratio);
-    player->heavy_infantry-=floor(player->heavy_infantry*ratio);
-    player->cavalry-=floor(player->cavalry*ratio);
+
+    player->light_infantry-=casualties_list->light_infantry;
+    player->heavy_infantry-=casualties_list->heavy_infantry;
+    player->cavalry-=casualties_list->cavalry;
 
 }
 
@@ -282,7 +300,7 @@ void kill_them_all(Game_data_struct *player){
     player->cavalry=0;
 }
 
-void duel(Game_data_struct *player1,Game_data_struct *player2,int code){
+int duel(Game_data_struct *player1,Game_data_struct *player2,int code,Game_data_struct *casualties_list){
 
     int attack;
     int defense;
@@ -292,21 +310,22 @@ void duel(Game_data_struct *player1,Game_data_struct *player2,int code){
 
     if(attack>defense){
         kill_them_all(player2);
-        if(code==ATTACK_CODE)
-            player1->victory_points++;
+        return 1;
     }
     else{
-        calculate_casualties(player2,attack,defense);
+        calculate_casualties(player2,attack,defense,casualties_list);
+        return 0;
     }
-
-
-    //show_player(player2);
 
 }
 
-void battle(Game_data_struct *player1,Game_data_struct *player2,int semaphore_id,int semnum){
+int battle(Game_data_struct *player1,Game_data_struct *player2,int semaphore_id,int semnum,Game_data_struct *attack_casualties_list,Game_data_struct *defense_casualties_list){
 
     sleep(ATTACK_DURATION);
+
+    clear_list(attack_casualties_list);
+    clear_list(defense_casualties_list);
+    int wynik=0;
 
     semaphore_down(semaphore_id,semnum);
 
@@ -316,11 +335,20 @@ void battle(Game_data_struct *player1,Game_data_struct *player2,int semaphore_id
     temp_player2=*player2;
 
 
-    duel(player1,player2,ATTACK_CODE);
 
-    duel(wsk_temp_player2,player1,DEFENSE_CODE);
+
+    if(duel(player1,player2,ATTACK_CODE,defense_casualties_list)==1){
+        wynik=1;
+        player1->victory_points++;
+    }
+
+    if(duel(wsk_temp_player2,player1,DEFENSE_CODE,attack_casualties_list)==1){
+        wynik=-1;
+    }
 
     semaphore_up(semaphore_id,semnum);
+
+    return wynik;
 
 }
 
@@ -345,28 +373,85 @@ int check_army(Game_data_struct *player,Game_data_struct *battle_list){
 
 }
 
-int war(Game_data_struct *attacker,Game_data_struct *defenser,Game_data_struct *battle_list,int semaphore_id,int semnum){
+int war(Game_data_struct *attacker,Game_data_struct *defenser,Game_data_struct *battle_list,Game_data_struct *attack_casualties_list,Game_data_struct *defense_casualties_list,int semaphore_id,int semnum){
 
+    int wynik;
     semaphore_down(semaphore_id,semnum);
     if(check_army(attacker,battle_list)==-1){
         semaphore_up(semaphore_id,semnum);
-        return -1;
+        return -2;
     }
     else{
 
         sendtroops(attacker,battle_list);
         semaphore_up(semaphore_id,semnum);
 
-        battle(battle_list,defenser,semaphore_id,semnum);
+        wynik=battle(battle_list,defenser,semaphore_id,semnum,attack_casualties_list,defense_casualties_list);
 
         semaphore_down(semaphore_id,semnum);
         bringboysbackhome(attacker,battle_list);
         semaphore_up(semaphore_id,semnum);
 
-        return 1;
+        return wynik;
     }
 }
 
+
+void conflict(Game_data_struct *attacker,Game_data_struct *defenser,Game_data_struct *battle_list,int attacker_queue_id,int defenser_queue_id,int semaphore_id,int semnum){
+
+
+    Game_message message;
+    Game_message attack_error_message;
+    attack_error_message.mtype=BLEDNY_ATAK;
+
+    Game_message attack_failure_message;
+    attack_failure_message.mtype=PORAZKA_ATAK;
+
+    Game_message defense_failure_message;
+    defense_failure_message.mtype=PORAZKA_OBRONA;
+
+    Game_message attack_loss_message;
+    attack_loss_message.mtype=STRATY_ATAK;
+
+    Game_message defense_loss_message;
+    defense_loss_message.mtype=STRATY_OBRONA;
+
+    Game_message attack_victory_message;
+    attack_victory_message.mtype=SKUTECZNY_ATAK;
+
+    Game_message defense_victory_message;
+    defense_victory_message.mtype=SKUTECZNA_OBRONA;
+
+    Game_data_struct attacker_casualties_list;
+    Game_data_struct *attacker_casualties_list_pointer;
+    Game_data_struct defenser_casulties_list;
+    Game_data_struct *defenser_casualties_list_pointer;
+
+
+
+    int war_result;
+
+    war_result=war(attacker,defenser,battle_list,attacker_casualties_list_pointer,defenser_casualties_list_pointer,semaphore_id,semnum);
+
+    if(war_result==-2){
+        msgsnd(attacker_queue_id,&attack_error_message,sizeof(attack_error_message.game_data),0);
+    }
+    else if(war_result==-1){
+        msgsnd(attacker_queue_id,&attack_failure_message,sizeof(attack_failure_message.game_data),0);
+        msgsnd(defenser_queue_id,&defense_victory_message, sizeof(defense_victory_message.game_data),0);
+    }
+    else if(war_result==0){
+        attack_loss_message.game_data=attacker_casualties_list;
+        msgsnd(attacker_queue_id,&attack_loss_message,sizeof(attack_loss_message.game_data),0);
+        defense_loss_message.game_data=defenser_casulties_list;
+        msgsnd(defenser_queue_id,&defense_loss_message,sizeof(defense_loss_message.game_data),0);
+    }
+    else if(war_result==1){
+        msgsnd(attacker_queue_id,&attack_victory_message, sizeof(attack_victory_message.game_data),0);
+        msgsnd(defenser_queue_id,&defense_failure_message,sizeof(defense_failure_message.game_data),0);
+    }
+
+}
 /* funkcje inicjalizujace */
 ///////////////////////////////////////////
 void init_clear(Game_data_struct *player,int semaphore_id,int semnum){
@@ -533,28 +618,6 @@ int main(int args, char* argv[]){
     init_clear(player2,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
     init_clear(train_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
 
-    //setval(player1,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,2,7,3,2,5000,0,0);
-    //setval(player2,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,7,5,3,0,0,0,0);
-
-
-
-
-
-    /*train_list.light_infantry=1;
-    train_list.cavalry=1;
-
-        int t=train(player1,train_list,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
-        printf("%d",t);
-
-    printf("PO WYPRODUKOWANIU JEDNOSTEK\n");
-
-    show_player(player1);
-    show_player(player2);
-     */
-
-
-
-
 
     if(fork()==0){  //pobieranie surowcow
         while(1){
@@ -572,46 +635,28 @@ int main(int args, char* argv[]){
             if(fork()==0){/* ATAKI */
                 if(fork()==0){ /* ATAKI GRACZA 1 */
                     Game_message message;
-                    Game_message attack_failure_message;
-                    attack_failure_message.mtype=BLEDNY_ATAK;
-
                     Game_data_struct battle_list;
                     Game_data_struct *battle_list_pointer=&battle_list;
 
-                    //setval(battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,2,7,3,0,0,0,0);
-
-
                     while(1){
-
                         msgrcv(gr1_queue_id,&message,sizeof(message.game_data),ATAK,0);
-                        //printf("TUTAJ");
                         battle_list=message.game_data;
 
-                        if(war(player1,player2,battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM)==-1){
-                            msgsnd(gr1_queue_id,&attack_failure_message,sizeof(attack_failure_message.game_data),0);
-                        }
+                        conflict(player1,player2,battle_list_pointer,gr1_queue_id,gr2_queue_id,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
 
                     }
                 }
                 else{ /* ATAKI GRACZA 2 */
                     Game_message message;
-                    Game_message attack_failure_message;
-                    attack_failure_message.mtype=BLEDNY_ATAK;
-
                     Game_data_struct battle_list;
                     Game_data_struct *battle_list_pointer=&battle_list;
-
-                    //setval(battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,2,7,3,0,0,0,0);
-
 
                     while(1){
 
                         msgrcv(gr2_queue_id,&message,sizeof(message.game_data),ATAK,0);
                         battle_list=message.game_data;
 
-                        if(war(player2,player1,battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM)==-1){
-                            msgsnd(gr2_queue_id,&attack_failure_message,sizeof(attack_failure_message.game_data),0);
-                        }
+                        conflict(player2,player1,battle_list_pointer,gr2_queue_id,gr1_queue_id,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
 
                     }
                 }

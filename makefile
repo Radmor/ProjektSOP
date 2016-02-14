@@ -1,4 +1,4 @@
-all: klient serwer
+all: klient serwer klient_output
 
 klient: klient.c
 	gcc -o klient klient.c
