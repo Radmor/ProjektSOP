@@ -276,12 +276,10 @@ void calculate_casualties(Game_data_struct *player,int attack,int defense){
 
 }
 
-void kill_them_all(Game_data_struct *player,int code){
+void kill_them_all(Game_data_struct *player){
     player->light_infantry=0;
     player->heavy_infantry=0;
     player->cavalry=0;
-    if(code==ATTACK_CODE)
-        player->victory_points++;
 }
 
 void duel(Game_data_struct *player1,Game_data_struct *player2,int code){
@@ -293,7 +291,9 @@ void duel(Game_data_struct *player1,Game_data_struct *player2,int code){
     defense=calculate_defense(player2);
 
     if(attack>defense){
-        kill_them_all(player2,code);
+        kill_them_all(player2);
+        if(code==ATTACK_CODE)
+            player1->victory_points++;
     }
     else{
         calculate_casualties(player2,attack,defense);
@@ -486,7 +486,11 @@ int main(int args, char* argv[]){
     Init_message init_message1;
     Init_message init_message2;
 
+    printf("\033[2J\033[1;1H");
+    printf("OCZEKIWANIE NA GRACZY\n");
+
     msgrcv(init_queue_id,&init_message1,sizeof(init_message1.init_data),ROZPOCZNIJ,0);
+    printf("POJAWIENIE SIE GRACZA 1\n");
     msgrcv(init_queue_id,&init_message2,sizeof(init_message1.init_data),ROZPOCZNIJ,0);
 
 
@@ -517,6 +521,9 @@ int main(int args, char* argv[]){
     msgsnd(init_queue_id,&init_message1,sizeof(init_message1.init_data),0);
     msgsnd(init_queue_id,&init_message2,sizeof(init_message2.init_data),0);
 
+    printf("\033[2J\033[1;1H");
+    printf("GRA ROZPOCZETA\n");
+
 
 
     Game_data_struct train_list;
@@ -529,10 +536,8 @@ int main(int args, char* argv[]){
     //setval(player1,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,2,7,3,2,5000,0,0);
     //setval(player2,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,7,5,3,0,0,0,0);
 
-    printf("PO INICJALIZACJI\n");
 
-    show_player(player1);
-    show_player(player2);
+
 
 
     /*train_list.light_infantry=1;
@@ -564,41 +569,102 @@ int main(int args, char* argv[]){
     else{
 
         if(fork()==0){
-            if(fork()==0){/* ATAKI OD GRACZA 1 */
-                Game_message message;
-                Game_message attack_failure_message;
-                attack_failure_message.mtype=BLEDNY_ATAK;
+            if(fork()==0){/* ATAKI */
+                if(fork()==0){ /* ATAKI GRACZA 1 */
+                    Game_message message;
+                    Game_message attack_failure_message;
+                    attack_failure_message.mtype=BLEDNY_ATAK;
 
-                Game_data_struct battle_list;
-                Game_data_struct *battle_list_pointer=&battle_list;
+                    Game_data_struct battle_list;
+                    Game_data_struct *battle_list_pointer=&battle_list;
 
-                //setval(battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,2,7,3,0,0,0,0);
+                    //setval(battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,2,7,3,0,0,0,0);
 
 
-                while(1){
+                    while(1){
 
-                    msgrcv(gr1_queue_id,&message,sizeof(message.game_data),ATAK,0);
-                    printf("TUTAJ");
-                    battle_list=message.game_data;
+                        msgrcv(gr1_queue_id,&message,sizeof(message.game_data),ATAK,0);
+                        //printf("TUTAJ");
+                        battle_list=message.game_data;
 
-                    if(war(player1,player2,battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM)==-1){
-                        msgsnd(gr1_queue_id,&attack_failure_message,sizeof(attack_failure_message.game_data),0);
+                        if(war(player1,player2,battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM)==-1){
+                            msgsnd(gr1_queue_id,&attack_failure_message,sizeof(attack_failure_message.game_data),0);
+                        }
+
+                    }
+                }
+                else{ /* ATAKI GRACZA 2 */
+                    Game_message message;
+                    Game_message attack_failure_message;
+                    attack_failure_message.mtype=BLEDNY_ATAK;
+
+                    Game_data_struct battle_list;
+                    Game_data_struct *battle_list_pointer=&battle_list;
+
+                    //setval(battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM,2,7,3,0,0,0,0);
+
+
+                    while(1){
+
+                        msgrcv(gr2_queue_id,&message,sizeof(message.game_data),ATAK,0);
+                        battle_list=message.game_data;
+
+                        if(war(player2,player1,battle_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM)==-1){
+                            msgsnd(gr2_queue_id,&attack_failure_message,sizeof(attack_failure_message.game_data),0);
+                        }
+
+                    }
+                }
+
+            }
+            else{
+                if(fork()==0){ /*Treningi jednostek */
+                    if(fork()==0){ /* TRENING GRACZA 1 */
+                        Game_message train_message;
+                        Game_message train_failure_message;
+                        train_failure_message.mtype=NIEDOST_SUROWCE;
+
+                        Game_data_struct train_list;
+
+                        while(1){
+                            msgrcv(gr1_queue_id,&train_message, sizeof(train_message.game_data),TWORZ,0);
+                            train_list=train_message.game_data;
+                            if(train(player1,train_list,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM)==-1){
+                                msgsnd(gr1_queue_id,&train_failure_message, sizeof(train_failure_message.game_data),0);
+                            }
+
+                        }
+                    }
+                    else{ /*TRENING GRACZA 2 */
+                        Game_message train_message;
+                        Game_message train_failure_message;
+                        train_failure_message.mtype=NIEDOST_SUROWCE;
+
+                        Game_data_struct train_list;
+
+                        while(1){
+                            msgrcv(gr2_queue_id,&train_message, sizeof(train_message.game_data),TWORZ,0);
+                            train_list=train_message.game_data;
+                            if(train(player2,train_list,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM)==-1){
+                                msgsnd(gr2_queue_id,&train_failure_message, sizeof(train_failure_message.game_data),0);
+                            }
+
+                        }
                     }
 
                 }
-            }
-            else{
-                Game_message game_message;
-                game_message.mtype=STAN;
+                else{
+                    Game_message game_message;
+                    game_message.mtype=STAN;
 
-                while(1){
-                    sleep(INFO_FREQUENCY);
-                    game_message.game_data=*player1;
-                    msgsnd(gr1_queue_id,&game_message, sizeof(game_message.game_data),0);
-                    game_message.game_data=*player2;
-                    msgsnd(gr2_queue_id,&game_message, sizeof(game_message.game_data),0);
+                    while(1){
+                        sleep(INFO_FREQUENCY);
+                        game_message.game_data=*player1;
+                        msgsnd(gr1_queue_id,&game_message, sizeof(game_message.game_data),0);
+                        game_message.game_data=*player2;
+                        msgsnd(gr2_queue_id,&game_message, sizeof(game_message.game_data),0);
+                    }
                 }
-
 
             }
 

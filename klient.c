@@ -90,6 +90,8 @@ void show_player(Game_data_struct player){
 
 int main(int args, char argv[]){
 
+    printf("OCZEKIWANIE NA DRUGIEGO GRACZA\n");
+
     int init_queue_id=msgget(INIT_QUEUE_KEY,IPC_CREAT|0664);
 
     Init_message init_message;
@@ -117,7 +119,7 @@ int main(int args, char argv[]){
     }
     else{
 
-        int decyzja;
+        char decyzja;
         Game_message train_message;
         train_message.mtype=TWORZ;
         Game_message battle_message;
@@ -130,11 +132,12 @@ int main(int args, char argv[]){
 
         while(1){
             printf("\033[2J\033[1;1H");
+            printf("ID TWOJEJ KOLEJKI TO: %d\n",game_queue_id);
             printf("WYBIERZ AKCJE:\n1-trening jednostek\n2-atak\n\n");
-            scanf("%d",&decyzja);
+            scanf(" %c",&decyzja);
 
             switch(decyzja){
-                case 1:
+                case '1':
                     printf("Wybierz liczbe jednostek lekkiej piechoty\n");
                     scanf("%d",&train_list.light_infantry);
                     printf("Wybierz liczbe jednostek ciezkiej piechoty\n");
@@ -142,13 +145,13 @@ int main(int args, char argv[]){
                     printf("Wybierz liczbe jednostek jazdy\n");
                     scanf("%d",&train_list.cavalry);
                     printf("Wybierz liczbe robotnikow\n");
-                    scanf("%d",&train_list.workers);
+                    scanf(" %d",&train_list.workers);
 
                     train_message.game_data=train_list;
 
                     msgsnd(game_queue_id,&train_message, sizeof(train_message.game_data),0);
                     printf("WYSLANO POLECENIE TRENINGU\n");
-                case 2:
+                case '2':
                     printf("Wybierz liczbe jednostek lekkiej piechoty\n");
                     scanf("%d",&battle_list.light_infantry);
                     printf("Wybierz liczbe jednostek ciezkiej piechoty\n");
@@ -159,7 +162,7 @@ int main(int args, char argv[]){
                     battle_message.game_data=battle_list;
 
                     msgsnd(game_queue_id,&battle_message, sizeof(battle_message.game_data),0);
-                    //printf("WYSLANO POLECENIE ATAKU\n");
+                    printf("WYSLANO POLECENIE ATAKU\n");
                 default:
 
                     printf("NIE MA TAKIEJ KOMENDY\n");
