@@ -42,19 +42,23 @@
 
 /* key semaforow */
 #define SEMAPHORE_KEY 67
-#define SEMAPHORE_QUANTITY 3
+#define SEMAPHORE_QUANTITY 4
 
 #define SHARED_MEMORY_SEMAPHORE_NUM 0
 #define SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM 1
 #define SHARED_MEMORY_PLAYER2_SEMAPHORE_NUM 2
+#define SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM 3
 
 #define SHARED_MEMORY_SEMAPHORE_INIT 1
 #define SHARED_MEMORY_PLAYER1_SEMAPHORE_INIT 1
 #define SHARED_MEMORY_PLAYER2_SEMAPHORE_INIT 1
+#define SHARED_MEMORY_ENDGAME_SEMAPHORE_INIT 1
 
 /* key pamieci wspoldzielonej */
 #define SHARED_MEMORY_PLAYER1_KEY 21
 #define SHARED_MEMORY_PLAYER2_KEY 37
+#define SHARED_MEMORY_ENDGAME_KEY 67
+#define SHARED_MEMORY_PIDS_KEY 665
 
 /* consty dotycace dodawania surowcow */
 
@@ -68,6 +72,20 @@
 #define ATTACK_CODE 1
 #define DEFENSE_CODE 1
 #define INFO_FREQUENCY 4
+#define ENDGAME_CHECK_FREQUENCY 2
+#define SIGKILL 9
+
+
+/* consty dotyczace pidow */
+#define PIDS_QUANTITY 8
+#define STOCKS_PID 0
+#define PLAYER1_ATTACK_PID 1
+#define PLAYER2_ATTACK_PID 2
+#define PLAYER1_TRAIN_PID 3
+#define PLAYER2_TRAIN_PID 4
+#define STATE_PID 5
+#define PLAYER1_SURRENDER_PID 6
+#define PLAYER2_SURRENDER_PID 7
 
 
 
@@ -259,18 +277,18 @@ void clear_list(Game_data_struct *player){
 /* funkcje walki */
 //////////////////////////////////////////////////
 
-int calculate_attack(Game_data_struct *units_list){
+double calculate_attack(Game_data_struct *units_list){
 
-    int attack;
+    double attack;
 
     attack=(units_list->light_infantry*LIGHT_INFANTRY_DAMAGE)+(units_list->heavy_infantry*HEAVY_INFANTRY_DAMAGE)+(units_list->cavalry*CAVALRY_DAMAGE)+(units_list->workers*WORKER_DAMAGE);
 
     return attack;
 }
 
-int calculate_defense(Game_data_struct *units_list)
+double calculate_defense(Game_data_struct *units_list)
 {
-    int defense;
+    double defense;
 
     defense=(units_list->light_infantry*LIGHT_INFANTRY_DEFENSE)+(units_list->heavy_infantry*HEAVY_INFANTRY_DEFENSE)+(units_list->cavalry*CAVALRY_DEFENSE)+(units_list->workers*WORKER_DEFENSE);
 
@@ -279,18 +297,18 @@ int calculate_defense(Game_data_struct *units_list)
 
 
 
-void calculate_casualties(Game_data_struct *player,int attack,int defense,Game_data_struct *casualties_list){
+void calculate_casualties(Game_data_struct *player,double attack,double defense,Game_data_struct *casualties_list){
 
-    double ratio=(double)attack/(double)defense;
+    double ratio=attack/defense;
 
     casualties_list->light_infantry=floor(player->light_infantry*ratio);
     casualties_list->heavy_infantry=floor(player->heavy_infantry*ratio);
     casualties_list->cavalry=floor(player->cavalry*ratio);
 
 
-    player->light_infantry-=casualties_list->light_infantry;
-    player->heavy_infantry-=casualties_list->heavy_infantry;
-    player->cavalry-=casualties_list->cavalry;
+    player->light_infantry-=floor(player->light_infantry*ratio);
+    player->heavy_infantry-=floor(player->heavy_infantry*ratio);
+    player->cavalry-=floor(player->cavalry*ratio);
 
 }
 
@@ -300,26 +318,26 @@ void kill_them_all(Game_data_struct *player){
     player->cavalry=0;
 }
 
-int duel(Game_data_struct *player1,Game_data_struct *player2,int code,Game_data_struct *casualties_list){
+void duel(Game_data_struct *player1,Game_data_struct *player2,Game_data_struct *casualties_list){
 
-    int attack;
-    int defense;
+    double attack;
+    double defense;
 
     attack=calculate_attack(player1);
     defense=calculate_defense(player2);
 
     if(attack>defense){
         kill_them_all(player2);
-        return 1;
+        //return 1;
     }
     else{
         calculate_casualties(player2,attack,defense,casualties_list);
-        return 0;
+        //return 0;
     }
 
 }
 
-int battle(Game_data_struct *player1,Game_data_struct *player2,int semaphore_id,int semnum,Game_data_struct *attack_casualties_list,Game_data_struct *defense_casualties_list){
+void battle(Game_data_struct *player1,Game_data_struct *player2,int semaphore_id,int semnum,Game_data_struct *attack_casualties_list,Game_data_struct *defense_casualties_list){
 
     sleep(ATTACK_DURATION);
 
@@ -334,21 +352,30 @@ int battle(Game_data_struct *player1,Game_data_struct *player2,int semaphore_id,
 
     temp_player2=*player2;
 
+    duel(player1,player2,defense_casualties_list);
+    duel(wsk_temp_player2,player1,attack_casualties_list);
+    semaphore_up(semaphore_id,semnum);
 
+    /*
 
+    int duel1=duel(player1,player2,defense_casualties_list);
 
-    if(duel(player1,player2,ATTACK_CODE,defense_casualties_list)==1){
+    if(duel1==1){
         wynik=1;
         player1->victory_points++;
     }
 
-    if(duel(wsk_temp_player2,player1,DEFENSE_CODE,attack_casualties_list)==1){
+    int duel2=duel(wsk_temp_player2,player1,attack_casualties_list);
+
+    if(duel2==1){
         wynik=-1;
     }
 
     semaphore_up(semaphore_id,semnum);
 
     return wynik;
+
+     */
 
 }
 
@@ -378,21 +405,24 @@ int war(Game_data_struct *attacker,Game_data_struct *defenser,Game_data_struct *
     int wynik;
     semaphore_down(semaphore_id,semnum);
     if(check_army(attacker,battle_list)==-1){
+
         semaphore_up(semaphore_id,semnum);
         return -2;
     }
     else{
-
         sendtroops(attacker,battle_list);
         semaphore_up(semaphore_id,semnum);
 
-        wynik=battle(battle_list,defenser,semaphore_id,semnum,attack_casualties_list,defense_casualties_list);
+
+        sleep(10);
+        //battle(battle_list,defenser,semaphore_id,semnum,attack_casualties_list,defense_casualties_list);
+
 
         semaphore_down(semaphore_id,semnum);
         bringboysbackhome(attacker,battle_list);
         semaphore_up(semaphore_id,semnum);
+        return -1;
 
-        return wynik;
     }
 }
 
@@ -428,10 +458,11 @@ void conflict(Game_data_struct *attacker,Game_data_struct *defenser,Game_data_st
     Game_data_struct *defenser_casualties_list_pointer;
 
 
-
     int war_result;
 
     war_result=war(attacker,defenser,battle_list,attacker_casualties_list_pointer,defenser_casualties_list_pointer,semaphore_id,semnum);
+
+    printf("%d\n",war_result);
 
     if(war_result==-2){
         msgsnd(attacker_queue_id,&attack_error_message,sizeof(attack_error_message.game_data),0);
@@ -450,6 +481,7 @@ void conflict(Game_data_struct *attacker,Game_data_struct *defenser,Game_data_st
         msgsnd(attacker_queue_id,&attack_victory_message, sizeof(attack_victory_message.game_data),0);
         msgsnd(defenser_queue_id,&defense_failure_message,sizeof(defense_failure_message.game_data),0);
     }
+
 
 }
 /* funkcje inicjalizujace */
@@ -520,12 +552,17 @@ int main(int args, char* argv[]){
     }
 
     if(semctl(shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM,SETVAL,SHARED_MEMORY_PLAYER1_SEMAPHORE_INIT)==-1){
-        perror("Blad przy inicjalizacji semafora 0 pamieci wspoldzielonej");
+        perror("Blad przy inicjalizacji semafora 1 pamieci wspoldzielonej");
         exit(1);
     }
 
     if(semctl(shared_memory_semaphore_id,SHARED_MEMORY_PLAYER2_SEMAPHORE_NUM,SETVAL,SHARED_MEMORY_PLAYER2_SEMAPHORE_INIT)==-1){
-        perror("Blad przy inicjalizacji semafora 1 pamieci wspoldzielonej");
+        perror("Blad przy inicjalizacji semafora 2 pamieci wspoldzielonej");
+        exit(1);
+    }
+
+    if(semctl(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM,SETVAL,SHARED_MEMORY_ENDGAME_SEMAPHORE_INIT)==-1){
+        perror("Blad przy inicjalizacji semafora 3 pamieci wspoldzielonej");
         exit(1);
     }
 
@@ -551,11 +588,38 @@ int main(int args, char* argv[]){
         exit(1);
     }
 
+
+
     Game_data_struct *player2=(Game_data_struct*)shmat(SHARED_MEMORY_PLAYER2_ID,NULL,0);
     if(player2==NULL){
         perror("Blad przy przylaczeniu pamieci wspoldzielonej player2");
         exit(1);
     }
+
+
+    int shared_memory_endgame_id=shmget(SHARED_MEMORY_ENDGAME_KEY,sizeof(int),IPC_CREAT|0664);
+    if(shared_memory_endgame_id==-1){
+        perror("Blad przy tworzeniu pamieci wspoldzielonej endgame");
+        exit(1);
+    }
+
+    int *endgame=(int*)shmat(shared_memory_endgame_id,NULL,0);
+    if(endgame==NULL){
+        perror("Blad przy przylaczeniu pamieci wspoldzielonej endgame");
+        exit(1);
+    }
+
+    int shared_memory_pids_id=shmget(SHARED_MEMORY_PIDS_KEY,PIDS_QUANTITY*sizeof(int),IPC_CREAT|0664);
+    if(shared_memory_pids_id==-1){
+        perror("Blad przy tworzeniu pamieci wspoldzielonej pids");
+        exit(1);
+    }
+    int *pids=(int*)shmat(shared_memory_pids_id,NULL,0);
+    if(pids==NULL){
+        perror("Blad przy przylaczeniu pamieci wspoldzielonej pids");
+        exit(1);
+    }
+
 
     /* utworzenie kolejki komunikatow init */
 
@@ -571,12 +635,15 @@ int main(int args, char* argv[]){
     Init_message init_message1;
     Init_message init_message2;
 
+
     printf("\033[2J\033[1;1H");
     printf("OCZEKIWANIE NA GRACZY\n");
 
     msgrcv(init_queue_id,&init_message1,sizeof(init_message1.init_data),ROZPOCZNIJ,0);
+    int player1_id=init_message1.init_data.id_gracza;
     printf("POJAWIENIE SIE GRACZA 1\n");
     msgrcv(init_queue_id,&init_message2,sizeof(init_message1.init_data),ROZPOCZNIJ,0);
+    int player2_id=init_message2.init_data.id_gracza;
 
 
     /* utworzenie kolejki komunikatow gracza1 */
@@ -614,16 +681,20 @@ int main(int args, char* argv[]){
     Game_data_struct train_list;
     Game_data_struct *train_list_pointer=&train_list;
 
-    init_clear(player1,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
-    init_clear(player2,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
-    init_clear(train_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
+    init_clear(player1,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
+    init_clear(player2,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
+    init_clear(train_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
 
 
     if(fork()==0){  //pobieranie surowcow
+        int pid=getpid();
+        if(pid==-1){
+            perror("Blad przy pobieraniu STOCKS_PID");
+        }
+        pids[STOCKS_PID]=pid;
+
         while(1){
-            semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
-            add_stocks(player1,player2,shared_memory_semaphore_id,SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM);
-            semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
+            add_stocks(player1,player2,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
             sleep(1);
             //printf("Wyprodukowano surowce\n");
         }
@@ -634,6 +705,12 @@ int main(int args, char* argv[]){
         if(fork()==0){
             if(fork()==0){/* ATAKI */
                 if(fork()==0){ /* ATAKI GRACZA 1 */
+                    int pid=getpid();
+                    if(pid==-1){
+                        perror("Blad przy pobieraniu PLAYER1_ATTACK_PID");
+                    }
+                    pids[PLAYER1_ATTACK_PID]=pid;
+
                     Game_message message;
                     Game_data_struct battle_list;
                     Game_data_struct *battle_list_pointer=&battle_list;
@@ -647,6 +724,12 @@ int main(int args, char* argv[]){
                     }
                 }
                 else{ /* ATAKI GRACZA 2 */
+                    int pid=getpid();
+                    if(pid==-1){
+                        perror("Blad przy pobieraniu PLAYER2_ATTACK_PID");
+                    }
+                    pids[PLAYER2_ATTACK_PID]=pid;
+
                     Game_message message;
                     Game_data_struct battle_list;
                     Game_data_struct *battle_list_pointer=&battle_list;
@@ -665,6 +748,11 @@ int main(int args, char* argv[]){
             else{
                 if(fork()==0){ /*Treningi jednostek */
                     if(fork()==0){ /* TRENING GRACZA 1 */
+                        int pid=getpid();
+                        if(pid==-1){
+                            perror("Blad przy pobieraniu PLAYER1_TRAIN_PID");
+                        }
+                        pids[PLAYER1_TRAIN_PID]=pid;
                         Game_message train_message;
                         Game_message train_failure_message;
                         train_failure_message.mtype=NIEDOST_SUROWCE;
@@ -681,6 +769,11 @@ int main(int args, char* argv[]){
                         }
                     }
                     else{ /*TRENING GRACZA 2 */
+                        int pid=getpid();
+                        if(pid==-1){
+                            perror("Blad przy pobieraniu PLAYER2_TRAIN_PID");
+                        }
+                        pids[PLAYER2_TRAIN_PID]=pid;
                         Game_message train_message;
                         Game_message train_failure_message;
                         train_failure_message.mtype=NIEDOST_SUROWCE;
@@ -699,6 +792,11 @@ int main(int args, char* argv[]){
 
                 }
                 else{
+                    int pid=getpid();
+                    if(pid==-1){
+                        perror("Blad przy pobieraniu STATE_PID");
+                    }
+                    pids[STATE_PID]=pid;
                     Game_message game_message;
                     game_message.mtype=STAN;
 
@@ -716,13 +814,80 @@ int main(int args, char* argv[]){
 
         }
         else {
-                wait(NULL);
+                if(fork()==0){ /* poddawanie sie */
 
-                printf("PO BITWIE\n");
+                    if(fork()==0){ /* player1 poddaj sie */
+                        int pid=getpid();
+                        if(pid==-1){
+                            perror("Blad przy pobieraniu PLAYER1_SURRENDER_PID");
+                        }
+                        pids[PLAYER1_SURRENDER_PID]=pid;
 
-                show_player(player1);
-                show_player(player2);
+                        Game_message game_message;
+                        Game_message end_message;
+                        end_message.mtype=ZAKONCZ;
 
+                        msgrcv(gr1_queue_id,&game_message, sizeof(game_message.game_data),PODDAJSIE,0);
+
+                        end_message.game_data.winner=player2_id;
+                        msgsnd(gr2_queue_id,&end_message, sizeof(end_message.game_data),0);
+
+                        semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
+                        *endgame=1;
+                        semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
+
+                    }
+                    else{/* player2 poddaj sie */
+                        int pid=getpid();
+                        if(pid==-1){
+                            perror("Blad przy pobieraniu PLAYER2_SURRENDER_PID");
+                        }
+                        pids[PLAYER2_SURRENDER_PID]=pid;
+
+                        Game_message game_message;
+                        Game_message end_message;
+                        end_message.mtype=ZAKONCZ;
+
+                        msgrcv(gr2_queue_id,&game_message, sizeof(game_message.game_data),PODDAJSIE,0);
+
+                        end_message.game_data.winner=player1_id;
+                        msgsnd(gr1_queue_id,&end_message, sizeof(end_message.game_data),0);
+
+                        semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
+                        *endgame=1;
+                        semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
+
+
+
+                    }
+                }
+            else{  /*Konczenie gry*/
+                    int koniecgry=0;
+                    Game_message game_message;
+                    game_message.mtype=KONIEC;
+
+                    do{
+                        sleep(ENDGAME_CHECK_FREQUENCY);
+                        semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
+                        koniecgry=*endgame;
+                        semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
+                    }while(koniecgry==0);
+
+
+
+                    msgsnd(gr1_queue_id,&game_message, sizeof(game_message.game_data),0);
+                    msgsnd(gr1_queue_id,&game_message, sizeof(game_message.game_data),0);
+
+                    int i=0;
+
+                    for(i;i<PIDS_QUANTITY;i++){
+                        kill(pids[i],SIGKILL);
+                    }
+
+                    exit(0);
+
+
+                }
         }
 
     }
@@ -730,6 +895,13 @@ int main(int args, char* argv[]){
 
     return 0;
 }
+
+
+
+/* UWAGI
+ * istnieje ryzyko, że komendy ataku i treningu będą nie pokolei
+ * dodaj czyszczenie kolejki na poczatku
+ * */
 
 /* pytania
  * czy mozna pominac i nie zwracac zlego ataku

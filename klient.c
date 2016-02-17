@@ -28,6 +28,9 @@
 #define STRATY_OBRONA       13
 #define PODDAJSIE           14
 
+/* typy komunikatow miedzy klientem a outputem */
+#define ID 15
+
 /*typy komunikatow w kolejce ID_KOM_INIC*/
 #define ROZPOCZNIJ          1
 #define AKCEPTUJ            2
@@ -38,6 +41,8 @@
 #define INIT_QUEUE_KEY 2137
 #define GR1_QUEUE_KEY 1
 #define GR2_QUEUE_KEY 2
+
+#define SIGKILL 9
 
 /* struktury */
 
@@ -93,25 +98,50 @@ int main(int args, char argv[]){
     printf("OCZEKIWANIE NA DRUGIEGO GRACZA\n");
 
     int init_queue_id=msgget(INIT_QUEUE_KEY,IPC_CREAT|0664);
+    int id_gracza=rand()%100000;
 
     Init_message init_message;
     init_message.mtype=ROZPOCZNIJ;
-    init_message.init_data.id_gracza=rand()%10000;
+    init_message.init_data.id_gracza=id_gracza;
 
     Game_message game_message;
 
     msgsnd(init_queue_id,&init_message,sizeof(init_message.init_data),0);
 
-    msgrcv(init_queue_id,&init_message, sizeof(init_message.init_data),AKCEPTUJ,0);
+    while(1) {
+        msgrcv(init_queue_id,&init_message, sizeof(init_message.init_data),AKCEPTUJ,0);
+        if(init_message.init_data.id_gracza!=id_gracza) {
+            msgsnd(init_queue_id,&init_message, sizeof(init_message.init_data),0);
+        }
+        else {
+            break;
+        }
+
+    }
+
+    int output_queue_key=rand()%4000;
 
     int game_queue_id=init_message.init_data.id_kolejki_kom;
+    int output_queue_id=msgget(output_queue_key,IPC_CREAT|0664);
+    if(output_queue_id==-1){
+        perror("Blad przy tworzeniu kolejki output");
+        exit(1);
+    }
 
+    init_message.mtype=ID;
+    msgsnd(output_queue_id,&init_message, sizeof(init_message.init_data),0);
+
+    if(fork()==0){
 
         int decyzja;
         Game_message train_message;
         train_message.mtype=TWORZ;
+
         Game_message battle_message;
         battle_message.mtype=ATAK;
+
+        Game_message surrender_message;
+        surrender_message.mtype=PODDAJSIE;
 
         Game_data_struct train_list;
         Game_data_struct battle_list;
@@ -121,7 +151,8 @@ int main(int args, char argv[]){
 
         while(1){
             printf("\033[2J\033[1;1H");
-            printf("ID TWOJEJ KOLEJKI TO: %d\n",game_queue_id);
+            printf("ID TWOJEJ KOLEJKI TO: %d\n",output_queue_id);
+            printf("ID GRACZA TO: %d\n",id_gracza);
             printf("WYBIERZ AKCJE:\n1-trening jednostek\n2-atak\n\n");
             scanf("%d",&decyzja);
 
@@ -155,12 +186,41 @@ int main(int args, char argv[]){
                 msgsnd(game_queue_id,&battle_message, sizeof(battle_message.game_data),0);
                 printf("WYSLANO POLECENIE ATAKU\n");
             }
+            else if(decyzja==3){
+                printf("Poddales sie\n");
+                msgsnd(game_queue_id,&surrender_message, sizeof(game_message.game_data),0);
+                msgsnd(output_queue_id,&surrender_message,sizeof(game_message.game_data),0);
+
+                kill(0,SIGKILL);
+            }
             else {
                 printf("NIE MA TAKIEJ KOMENDY\n");
             }
 
         }
 
+    }
+    else {
 
+        Game_message message;
+
+        msgsnd(output_queue_id, &message, sizeof(message.game_data), 0);
+
+        while (1) {
+            msgrcv(game_queue_id, &message, sizeof(message.game_data), 0, 0);
+            if (message.mtype == KONIEC || message.mtype == ZAKONCZ) {
+                msgsnd(output_queue_id, &message, sizeof(message.game_data), 0);
+                kill(0, SIGKILL);
+            }
+            else if (message.mtype == ATAK || message.mtype == TWORZ || message.mtype == PODDAJSIE) {
+                msgsnd(game_queue_id, &message, sizeof(message.game_data), 0);
+            }
+            else {
+                msgsnd(output_queue_id, &message, sizeof(message.game_data), 0);
+            }
+
+        }
+
+    }
     return 0;
 }

@@ -28,6 +28,9 @@
 #define STRATY_OBRONA       13
 #define PODDAJSIE           14
 
+/* typy komunikatow miedzy klientem a outputem */
+#define ID 15
+
 /*typy komunikatow w kolejce ID_KOM_INIC*/
 #define ROZPOCZNIJ          1
 #define AKCEPTUJ            2
@@ -38,6 +41,8 @@
 #define INIT_QUEUE_KEY 2137
 #define GR1_QUEUE_KEY 1
 #define GR2_QUEUE_KEY 2
+
+#define SIGKILL 9
 
 /* struktury */
 
@@ -93,11 +98,19 @@ void show_casualties(Game_data_struct player){
     printf("\n");
 }
 
+void koniec(int sleep_time,int queue_id){
+    msgctl(queue_id,IPC_RMID,0);
+    sleep(sleep_time);
+    kill(0,SIGKILL);
+}
+
 
 /* koniec funkcji */
 
 
 int main(int args, char argv[]){
+
+    srand(time(0));
 
     printf("PODAJ ID KOLEJKI\n");
 
@@ -105,6 +118,10 @@ int main(int args, char argv[]){
     scanf("%d",&game_queue_id);
 
     Game_message message;
+    Init_message init_message;
+
+    msgrcv(game_queue_id,&init_message, sizeof(init_message),ID,0);
+    int id_gracza=init_message.init_data.id_gracza;
 
     while(1){
         msgrcv(game_queue_id,&message, sizeof(message.game_data),0,0);
@@ -144,6 +161,25 @@ int main(int args, char argv[]){
             printf("\033[2J\033[1;1H");
             printf("W CZASIE OBRONY ODNIESIONO NASTEPUJACE STRATY:\n");
             show_casualties(message.game_data);
+        }
+        if(message.mtype==KONIEC){
+            printf("\033[2J\033[1;1H");
+            printf("SERWER NAGLE PRZESTAL DZIALAC\nPROGRAM ZAKONCZY SIE ZA 3 SEKUNDY\n");
+            koniec(3,game_queue_id);
+        }
+        if(message.mtype==ZAKONCZ){
+            printf("\033[2J\033[1;1H");
+            if(message.game_data.winner==id_gracza)
+                printf("WYGRANA\n");
+            else
+                printf("PRZEGRANA\n");
+            printf("PROGRAM ZAKONCZY SIE ZA 3 sekundy\n");
+            koniec(3,game_queue_id);
+        }
+        if(message.mtype==PODDAJSIE){
+            printf("\033[2J\033[1;1H");
+            printf("PODDALES SIE\nPROGRAM ZAKONCZY SIE ZA 3 SEKUNDY\n");
+            koniec(3,game_queue_id);
         }
 
     }
