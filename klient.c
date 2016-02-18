@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
+#include <string.h>
 
 #include <fcntl.h>
 #include <math.h>
@@ -45,10 +46,15 @@
 #define SIGKILL 9
 
 
+
+#define MAX 1000
+
+
 /* zmienne globalne */
 
 int game_queue_id;
 int output_queue_id;
+
 
 
 /* struktury */
@@ -115,6 +121,17 @@ void interrupt(){
 }
 
 
+void flush_input(FILE *in)
+{
+    int c;
+
+    while ((c=fgetc(in))!=EOF && c!='\n')
+        ;
+
+    clearerr (in);
+}
+
+
 /* koniec funkcji */
 
 
@@ -171,7 +188,6 @@ int main(int args, char* argv[]){
 
     if(fork()==0){
 
-        int decyzja;
         Game_message train_message;
         train_message.mtype=TWORZ;
 
@@ -184,47 +200,70 @@ int main(int args, char* argv[]){
         Game_data_struct train_list;
         Game_data_struct battle_list;
 
-        int liczba;
+        char decyzja;
+
+        char buffer[MAX]="";
+        char character;
         char temp;
+        int position;
+
+        int wynik;
+        int tekst;
 
         while(1){
             printf("\033[2J\033[1;1H");
-            printf("ID TWOJEJ KOLEJKI TO: %d\n",output_queue_id);
+            //printf("ID TWOJEJ KOLEJKI TO: %d\n",output_queue_id);
             printf("ID GRACZA TO: %d\n",id_gracza);
             printf("WYBIERZ AKCJE:\n1-trening jednostek\n2-atak\n3-poddaj sie\n\n");
-            scanf("%d",&decyzja);
+            //scanf("%d",&decyzja);
 
-            if(decyzja==1) {
+            decyzja=fgetc (stdin);
+
+            flush_input(stdin);
+
+
+            if(decyzja=='1') {
+
+                //fseek(stdin,0,SEEK_END);
                 printf("Wybierz liczbe jednostek lekkiej piechoty\n");
-                scanf("%d",&train_list.light_infantry);
+                fgets (buffer, MAX, stdin);
+                train_list.light_infantry=(int)strtol(buffer,NULL,0);
 
                 printf("Wybierz liczbe jednostek ciezkiej piechoty\n");
-                scanf("%d",&train_list.heavy_infantry);
+                fgets (buffer, MAX, stdin);
+                train_list.heavy_infantry=(int)strtol(buffer,NULL,0);
 
                 printf("Wybierz liczbe jednostek jazdy\n");
-                scanf("%d",&train_list.cavalry);
+                fgets (buffer, MAX, stdin);
+                train_list.cavalry=(int)strtol(buffer,NULL,0);
 
                 printf("Wybierz liczbe robotnikow\n");
-                scanf("%d",&train_list.workers);
+                fgets (buffer, MAX, stdin);
+                train_list.workers=(int)strtol(buffer,NULL,0);
 
                 train_message.game_data=train_list;
                 msgsnd(game_queue_id,&train_message, sizeof(train_message.game_data),0);
                 printf("WYSLANO POLECENIE TRENINGU\n");
             }
-            else if(decyzja==2) {
+            else if(decyzja=='2') {
                 printf("Wybierz liczbe jednostek lekkiej piechoty\n");
-                scanf("%d",&battle_list.light_infantry);
+                fgets (buffer, MAX, stdin);
+                battle_list.light_infantry=(int)strtol(buffer,NULL,0);
+
                 printf("Wybierz liczbe jednostek ciezkiej piechoty\n");
-                scanf("%d",&battle_list.heavy_infantry);
+                fgets (buffer, MAX, stdin);
+                battle_list.heavy_infantry=(int)strtol(buffer,NULL,0);
+
                 printf("Wybierz liczbe jednostek jazdy\n");
-                scanf("%d",&battle_list.cavalry);
+                fgets (buffer, MAX, stdin);
+                battle_list.cavalry=(int)strtol(buffer,NULL,0);
 
                 battle_message.game_data=battle_list;
 
                 msgsnd(game_queue_id,&battle_message, sizeof(battle_message.game_data),0);
                 printf("WYSLANO POLECENIE ATAKU\n");
             }
-            else if(decyzja==3){
+            else if(decyzja=='3'){
                 printf("Poddales sie\n");
                 msgsnd(game_queue_id,&surrender_message, sizeof(surrender_message.game_data),0);
                 msgsnd(output_queue_id,&surrender_message,sizeof(surrender_message.game_data),0);
@@ -255,7 +294,6 @@ int main(int args, char* argv[]){
                 msgctl(game_queue_id,IPC_RMID,0);
                 msgctl(output_queue_id,IPC_RMID,0);
 
-                //popelniam sudoku
                 kill(0, SIGKILL);
             }
             else if (message.mtype == ATAK || message.mtype == TWORZ || message.mtype == PODDAJSIE) {

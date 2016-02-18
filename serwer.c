@@ -256,7 +256,7 @@ int train(Game_data_struct *player,Game_data_struct train_list,int semaphore_id,
 
     int i;
     int train_cost=(LIGHT_INFANTRY_PRICE*train_list.light_infantry)+(HEAVY_INFANTRY_PRICE*train_list.heavy_infantry)+(CAVALRY_PRICE*train_list.cavalry)+(WORKER_PRICE*train_list.workers);
-    if(train_cost>player->stocks)
+    if(train_cost>player->stocks || train_list.light_infantry<0 || train_list.heavy_infantry<0  || train_list.cavalry<0 || train_list.workers<0)
     {
 
         return -1;
@@ -467,7 +467,7 @@ void bringboysbackhome(Game_data_struct *attacker,Game_data_struct *battle_list)
 }
 
 int check_army(Game_data_struct *player,Game_data_struct *battle_list){
-    if(battle_list->light_infantry<=player->light_infantry && battle_list->heavy_infantry<=player->heavy_infantry && battle_list->cavalry<=player->cavalry && battle_list->light_infantry+battle_list->heavy_infantry+battle_list->cavalry>0)
+    if(battle_list->light_infantry<=player->light_infantry && battle_list->heavy_infantry<=player->heavy_infantry && battle_list->cavalry<=player->cavalry && battle_list->light_infantry>=0 && battle_list->heavy_infantry>=0 && battle_list->cavalry>=0 && (battle_list->light_infantry+battle_list->heavy_infantry+battle_list->cavalry)>0)
         return 1;
     else
         return -1;
@@ -528,6 +528,9 @@ void conflict(Game_data_struct *attacker,Game_data_struct *defenser,Game_data_st
     Game_data_struct *attacker_casualties_list_pointer=&attacker_casualties_list;
     Game_data_struct defenser_casualties_list;
     Game_data_struct *defenser_casualties_list_pointer=&defenser_casualties_list;
+
+    clear_list(attacker_casualties_list_pointer);
+    clear_list(defenser_casualties_list_pointer);
 
 
     int war_result;
