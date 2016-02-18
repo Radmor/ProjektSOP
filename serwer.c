@@ -121,6 +121,11 @@
 #define WORKER_DEFENSE 0
 #define WORKER_PRODUCTION_TIME 2
 
+
+int gr1_queue_id;
+int gr2_queue_id;
+int *pids;
+
 /* struktury */
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -193,6 +198,44 @@ void semaphore_down(int semid,int semnum){
         perror("Opuszczenie semafora");
         exit(1);
     }
+}
+
+
+void interrupt(){
+    int i;
+    printf("DZIALANIE SERWERA ZOSTALO NAGLE PRZERWANE\n");
+
+    Game_message message;
+    message.mtype=KONIEC;
+
+    msgsnd(gr1_queue_id,&message, sizeof(message.game_data),0);
+    msgsnd(gr2_queue_id,&message, sizeof(message.game_data),0);
+
+    msgctl(gr1_queue_id,IPC_RMID,0);
+    msgctl(gr2_queue_id,IPC_RMID,0);
+
+    for(i=0;i<PIDS_QUANTITY;i++){
+        kill(pids[i],SIGKILL);
+    }
+
+    exit(0);
+
+}
+
+
+void end_of_game(){
+    int i;
+    printf("GRA ZOSTALA ZAKONCZONA\n");
+
+    msgctl(gr1_queue_id,IPC_RMID,0);
+    msgctl(gr2_queue_id,IPC_RMID,0);
+
+    for(i=0;i<PIDS_QUANTITY;i++){
+        kill(pids[i],SIGKILL);
+    }
+
+    exit(0);
+
 }
 
 
@@ -347,7 +390,7 @@ void battle(Game_data_struct *player1,Game_data_struct *player2,int semaphore_id
 
     semaphore_down(semaphore_id,semnum);
 
-    Game_data_struct temp_player1,temp_player2;
+    Game_data_struct temp_player2;
     Game_data_struct *wsk_temp_player2=&temp_player2;
 
     temp_player2=*player2;
@@ -415,13 +458,14 @@ int war(Game_data_struct *attacker,Game_data_struct *defenser,Game_data_struct *
 
 
         sleep(10);
+        wynik=-1;
         //battle(battle_list,defenser,semaphore_id,semnum,attack_casualties_list,defense_casualties_list);
 
 
         semaphore_down(semaphore_id,semnum);
         bringboysbackhome(attacker,battle_list);
         semaphore_up(semaphore_id,semnum);
-        return -1;
+        return wynik;
 
     }
 }
@@ -534,7 +578,11 @@ void init_player(Game_data_struct *player,int semaphore_id,int semnum){
 }
 
 
+
+
 int main(int args, char* argv[]){
+
+    signal(SIGINT,interrupt);
 
 
 
@@ -609,12 +657,14 @@ int main(int args, char* argv[]){
         exit(1);
     }
 
+    *endgame=0;
+
     int shared_memory_pids_id=shmget(SHARED_MEMORY_PIDS_KEY,PIDS_QUANTITY*sizeof(int),IPC_CREAT|0664);
     if(shared_memory_pids_id==-1){
         perror("Blad przy tworzeniu pamieci wspoldzielonej pids");
         exit(1);
     }
-    int *pids=(int*)shmat(shared_memory_pids_id,NULL,0);
+    pids=(int*)shmat(shared_memory_pids_id,NULL,0);
     if(pids==NULL){
         perror("Blad przy przylaczeniu pamieci wspoldzielonej pids");
         exit(1);
@@ -648,7 +698,7 @@ int main(int args, char* argv[]){
 
     /* utworzenie kolejki komunikatow gracza1 */
 
-    int gr1_queue_id=msgget(GR1_QUEUE_KEY,IPC_CREAT|0664);
+    gr1_queue_id=msgget(GR1_QUEUE_KEY,IPC_CREAT|0664);
     if(gr1_queue_id==-1){
         perror("Blad przy tworzeniu kolejki gracza 1");
         exit(1);
@@ -656,11 +706,12 @@ int main(int args, char* argv[]){
 
     /* utworzenie kolejki komunikatow gracza2 */
 
-    int gr2_queue_id=msgget(GR2_QUEUE_KEY,IPC_CREAT|0664);
+    gr2_queue_id=msgget(GR2_QUEUE_KEY,IPC_CREAT|0664);
     if(gr2_queue_id==-1){
         perror("Blad przy tworzeniu kolejki gracza 2");
         exit(1);
     }
+
 
     init_message1.mtype=AKCEPTUJ;
     init_message1.init_data.id_kolejki_kom=gr1_queue_id;
@@ -797,8 +848,10 @@ int main(int args, char* argv[]){
                         perror("Blad przy pobieraniu STATE_PID");
                     }
                     pids[STATE_PID]=pid;
+
                     Game_message game_message;
                     game_message.mtype=STAN;
+
 
                     while(1){
                         sleep(INFO_FREQUENCY);
@@ -863,8 +916,10 @@ int main(int args, char* argv[]){
                 }
             else{  /*Konczenie gry*/
                     int koniecgry=0;
+                    /*
                     Game_message game_message;
                     game_message.mtype=KONIEC;
+                     */
 
                     do{
                         sleep(ENDGAME_CHECK_FREQUENCY);
@@ -873,18 +928,12 @@ int main(int args, char* argv[]){
                         semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
                     }while(koniecgry==0);
 
-
-
+                    /*
                     msgsnd(gr1_queue_id,&game_message, sizeof(game_message.game_data),0);
-                    msgsnd(gr1_queue_id,&game_message, sizeof(game_message.game_data),0);
+                    msgsnd(gr2_queue_id,&game_message, sizeof(game_message.game_data),0);
+                     */
 
-                    int i=0;
-
-                    for(i;i<PIDS_QUANTITY;i++){
-                        kill(pids[i],SIGKILL);
-                    }
-
-                    exit(0);
+                    end_of_game();
 
 
                 }

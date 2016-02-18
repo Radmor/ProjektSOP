@@ -95,6 +95,8 @@ void show_player(Game_data_struct player){
 
 int main(int args, char argv[]){
 
+    srand(time(0));
+
     printf("OCZEKIWANIE NA DRUGIEGO GRACZA\n");
 
     int init_queue_id=msgget(INIT_QUEUE_KEY,IPC_CREAT|0664);
@@ -108,7 +110,7 @@ int main(int args, char argv[]){
 
     msgsnd(init_queue_id,&init_message,sizeof(init_message.init_data),0);
 
-    while(1) {
+    /*while(1) {
         msgrcv(init_queue_id,&init_message, sizeof(init_message.init_data),AKCEPTUJ,0);
         if(init_message.init_data.id_gracza!=id_gracza) {
             msgsnd(init_queue_id,&init_message, sizeof(init_message.init_data),0);
@@ -118,6 +120,10 @@ int main(int args, char argv[]){
         }
 
     }
+    */
+
+    msgrcv(init_queue_id,&init_message, sizeof(init_message.init_data),AKCEPTUJ,0);
+
 
     int output_queue_key=rand()%4000;
 
@@ -153,7 +159,7 @@ int main(int args, char argv[]){
             printf("\033[2J\033[1;1H");
             printf("ID TWOJEJ KOLEJKI TO: %d\n",output_queue_id);
             printf("ID GRACZA TO: %d\n",id_gracza);
-            printf("WYBIERZ AKCJE:\n1-trening jednostek\n2-atak\n\n");
+            printf("WYBIERZ AKCJE:\n1-trening jednostek\n2-atak\n3-poddaj sie\n\n");
             scanf("%d",&decyzja);
 
             if(decyzja==1) {
@@ -188,10 +194,11 @@ int main(int args, char argv[]){
             }
             else if(decyzja==3){
                 printf("Poddales sie\n");
-                msgsnd(game_queue_id,&surrender_message, sizeof(game_message.game_data),0);
-                msgsnd(output_queue_id,&surrender_message,sizeof(game_message.game_data),0);
+                msgsnd(game_queue_id,&surrender_message, sizeof(surrender_message.game_data),0);
+                msgsnd(output_queue_id,&surrender_message,sizeof(surrender_message.game_data),0);
 
                 kill(0,SIGKILL);
+
             }
             else {
                 printf("NIE MA TAKIEJ KOMENDY\n");

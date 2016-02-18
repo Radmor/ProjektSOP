@@ -120,54 +120,55 @@ int main(int args, char argv[]){
     Game_message message;
     Init_message init_message;
 
-    msgrcv(game_queue_id,&init_message, sizeof(init_message),ID,0);
+    msgrcv(game_queue_id,&init_message, sizeof(init_message.init_data),ID,0);
     int id_gracza=init_message.init_data.id_gracza;
+
 
     while(1){
         msgrcv(game_queue_id,&message, sizeof(message.game_data),0,0);
         if(message.mtype==STAN){
             show_player(message.game_data);
         }
-        if(message.mtype==BLEDNY_ATAK){
+        else if(message.mtype==BLEDNY_ATAK){
             printf("\033[2J\033[1;1H");
             printf("WYKONALES BLEDNY ATAK");
         }
-        if(message.mtype==NIEDOST_SUROWCE){
+        else if(message.mtype==NIEDOST_SUROWCE){
             printf("\033[2J\033[1;1H");
             printf("NIE MASZ WYSTARCZAJACEJ ILOSCI SUROWCOW");
         }
-        if(message.mtype==SKUTECZNY_ATAK){
+        else if(message.mtype==SKUTECZNY_ATAK){
             printf("\033[2J\033[1;1H");
             printf("PRZEPROWADZONO SKUTECZNY ATAK\n");
         }
-        if(message.mtype==SKUTECZNA_OBRONA){
+        else if(message.mtype==SKUTECZNA_OBRONA){
             printf("\033[2J\033[1;1H");
             printf("PRZEPROWADZONO SKUTECZNA OBRONE\n");
         }
-        if(message.mtype==PORAZKA_ATAK){
+        else if(message.mtype==PORAZKA_ATAK){
             printf("\033[2J\033[1;1H");
             printf("ARMIA ZOSTALA ROZGROMIONA W TRAKCIE ATAKU\n");
         }
-        if(message.mtype==PORAZKA_OBRONA){
+        else if(message.mtype==PORAZKA_OBRONA){
             printf("\033[2J\033[1;1H");
             printf("ARMIA ZOSTALA ROZGROMIONA W TRAKCIE OBRONY\n");
         }
-        if(message.mtype==STRATY_ATAK){
+        else if(message.mtype==STRATY_ATAK){
             printf("\033[2J\033[1;1H");
             printf("W CZASIE ATAKU ODNIESIONO NASTEPUJACE STRATY:\n");
             show_casualties(message.game_data);
         }
-        if(message.mtype==STRATY_OBRONA){
+        else if(message.mtype==STRATY_OBRONA){
             printf("\033[2J\033[1;1H");
             printf("W CZASIE OBRONY ODNIESIONO NASTEPUJACE STRATY:\n");
             show_casualties(message.game_data);
         }
-        if(message.mtype==KONIEC){
+        else if(message.mtype==KONIEC){
             printf("\033[2J\033[1;1H");
             printf("SERWER NAGLE PRZESTAL DZIALAC\nPROGRAM ZAKONCZY SIE ZA 3 SEKUNDY\n");
             koniec(3,game_queue_id);
         }
-        if(message.mtype==ZAKONCZ){
+        else if(message.mtype==ZAKONCZ){
             printf("\033[2J\033[1;1H");
             if(message.game_data.winner==id_gracza)
                 printf("WYGRANA\n");
@@ -176,10 +177,14 @@ int main(int args, char argv[]){
             printf("PROGRAM ZAKONCZY SIE ZA 3 sekundy\n");
             koniec(3,game_queue_id);
         }
-        if(message.mtype==PODDAJSIE){
+        else if(message.mtype==PODDAJSIE){
             printf("\033[2J\033[1;1H");
             printf("PODDALES SIE\nPROGRAM ZAKONCZY SIE ZA 3 SEKUNDY\n");
             koniec(3,game_queue_id);
+        }
+        else{
+            printf("%ld\n",message.mtype);
+
         }
 
     }
