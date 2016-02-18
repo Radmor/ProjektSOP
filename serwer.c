@@ -42,23 +42,26 @@
 
 /* key semaforow */
 #define SEMAPHORE_KEY 67
-#define SEMAPHORE_QUANTITY 4
+#define SEMAPHORE_QUANTITY 5
 
 #define SHARED_MEMORY_SEMAPHORE_NUM 0
 #define SHARED_MEMORY_PLAYER1_SEMAPHORE_NUM 1
 #define SHARED_MEMORY_PLAYER2_SEMAPHORE_NUM 2
 #define SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM 3
+#define SHARED_MEMORY_WINNER_SEMAPHORE_NUM 4
 
 #define SHARED_MEMORY_SEMAPHORE_INIT 1
 #define SHARED_MEMORY_PLAYER1_SEMAPHORE_INIT 1
 #define SHARED_MEMORY_PLAYER2_SEMAPHORE_INIT 1
 #define SHARED_MEMORY_ENDGAME_SEMAPHORE_INIT 1
+#define SHARED_MEMORY_WINNER_SEMAPHORE_INIT 1
 
 /* key pamieci wspoldzielonej */
 #define SHARED_MEMORY_PLAYER1_KEY 21
 #define SHARED_MEMORY_PLAYER2_KEY 37
-#define SHARED_MEMORY_ENDGAME_KEY 67
+#define SHARED_MEMORY_ENDGAME_KEY 87
 #define SHARED_MEMORY_PIDS_KEY 665
+#define SHARED_MEMORY_WINNER_KEY 78
 
 /* consty dotycace dodawania surowcow */
 
@@ -212,15 +215,9 @@ void interrupt(){
     msgsnd(gr2_queue_id,&message, sizeof(message.game_data),0);
 
 
-
     for(i=0;i<PIDS_QUANTITY;i++){
         kill(pids[i],SIGKILL);
     }
-
-    usleep(25);
-
-    msgctl(gr1_queue_id,IPC_RMID,0);
-    msgctl(gr2_queue_id,IPC_RMID,0);
 
     exit(0);
 
@@ -231,18 +228,9 @@ void end_of_game(){
     int i;
     printf("GRA ZOSTALA ZAKONCZONA\n");
 
-
-
-
-
     for(i=0;i<PIDS_QUANTITY;i++){
         kill(pids[i],SIGKILL);
     }
-
-    usleep(25);
-
-    msgctl(gr1_queue_id,IPC_RMID,0);
-    msgctl(gr2_queue_id,IPC_RMID,0);
 
     exit(0);
 
@@ -684,6 +672,11 @@ int main(int args, char* argv[]){
         exit(1);
     }
 
+    if(semctl(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM,SETVAL,SHARED_MEMORY_WINNER_SEMAPHORE_INIT)==-1){
+        perror("Blad przy inicjalizacji semafora 4 pamieci wspoldzielonej");
+        exit(1);
+    }
+
     /* utworzenie i przylaczenie pamieci wspoldzielonej player1 */
 
     int SHARED_MEMORY_PLAYER1_ID=shmget(SHARED_MEMORY_PLAYER1_KEY,sizeof(Game_data_struct),IPC_CREAT|0664);
@@ -737,6 +730,18 @@ int main(int args, char* argv[]){
     pids=(int*)shmat(shared_memory_pids_id,NULL,0);
     if(pids==NULL){
         perror("Blad przy przylaczeniu pamieci wspoldzielonej pids");
+        exit(1);
+    }
+
+    int shared_memory_winner_id=shmget(SHARED_MEMORY_WINNER_KEY, sizeof(int),IPC_CREAT|0664);
+    if(shared_memory_winner_id==-1){
+        perror("Blad przy tworzeniu pamieci wspoldzielonej winner");
+        exit(1);
+    }
+
+    int *winner=(int*) shmat(shared_memory_winner_id,NULL,0);
+    if(winner==NULL){
+        perror("Blad przy przylaczeniu pamieci wspoldzielonej winner");
         exit(1);
     }
 
@@ -946,6 +951,8 @@ int main(int args, char* argv[]){
                         }
                         pids[PLAYER1_SURRENDER_PID]=pid;
 
+                        /*
+
                         Game_message game_message;
                         Game_message end_message;
                         end_message.mtype=ZAKONCZ;
@@ -956,9 +963,23 @@ int main(int args, char* argv[]){
                         msgsnd(gr1_queue_id,&end_message, sizeof(end_message.game_data),0);
                         msgsnd(gr2_queue_id,&end_message, sizeof(end_message.game_data),0);
 
+                         */
+
+                        Game_message game_message;
+
+
+                        msgrcv(gr1_queue_id,&game_message, sizeof(game_message.game_data),PODDAJSIE,0);
+
+                        //semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
+                        *winner=player2_id;
+                        //semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
+
                         semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
                         *endgame=1;
                         semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
+
+
+
 
                     }
                     else{/* player2 poddaj sie */
@@ -968,8 +989,11 @@ int main(int args, char* argv[]){
                         }
                         pids[PLAYER2_SURRENDER_PID]=pid;
 
+
                         Game_message game_message;
+                        /*
                         Game_message end_message;
+
                         end_message.mtype=ZAKONCZ;
 
                         msgrcv(gr2_queue_id,&game_message, sizeof(game_message.game_data),PODDAJSIE,0);
@@ -978,9 +1002,21 @@ int main(int args, char* argv[]){
                         msgsnd(gr1_queue_id,&end_message, sizeof(end_message.game_data),0);
                         msgsnd(gr2_queue_id,&end_message, sizeof(end_message.game_data),0);
 
+                        */
+
+
+                        msgrcv(gr2_queue_id,&game_message, sizeof(game_message.game_data),PODDAJSIE,0);
+
+                        //semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
+                        *winner=player1_id;
+                        //semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
+
+
                         semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
                         *endgame=1;
                         semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
+
+
 
 
 
@@ -1000,10 +1036,16 @@ int main(int args, char* argv[]){
                         semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
                     }while(koniecgry==0);
 
+
                     if(player1->victory_points==5)
                         game_message.game_data.winner=player1_id;
                     else if(player2->victory_points==5)
                         game_message.game_data.winner=player2_id;
+                    else{
+                        //semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
+                        game_message.game_data.winner=*winner;
+                        //semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
+                    }
 
 
                     msgsnd(gr1_queue_id,&game_message, sizeof(game_message.game_data),0);

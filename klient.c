@@ -44,6 +44,13 @@
 
 #define SIGKILL 9
 
+
+/* zmienne globalne */
+
+int game_queue_id;
+int output_queue_id;
+
+
 /* struktury */
 
 typedef struct Game_data_struct{
@@ -89,13 +96,31 @@ void show_player(Game_data_struct player){
     printf("\n");
 }
 
+void interrupt(){
+
+    printf("NAGLE ZAKONCZONO PROGRAM\n");
+
+    Game_message game_message;
+    game_message.mtype=PODDAJSIE;
+
+    msgsnd(game_queue_id,&game_message, sizeof(game_message.game_data),0);
+    msgsnd(output_queue_id,&game_message, sizeof(game_message.game_data),0);
+
+    sleep(1);
+
+    msgctl(game_queue_id,IPC_RMID,0);
+
+    kill(0,SIGKILL);
+
+}
+
 
 /* koniec funkcji */
 
 
 int main(int args, char* argv[]){
 
-    srand(time(0));
+    signal(SIGINT,interrupt);
 
     printf("OCZEKIWANIE NA DRUGIEGO GRACZA\n");
 
@@ -126,7 +151,7 @@ int main(int args, char* argv[]){
 
     int game_queue_key=init_message.init_data.id_kolejki_kom;
 
-    int game_queue_id=msgget(game_queue_key,IPC_CREAT|0664);
+    game_queue_id=msgget(game_queue_key,IPC_CREAT|0664);
     if(game_queue_id==-1){
         perror("Blad przy otwarciu kolejki do komunikacji");
         exit(1);
@@ -134,7 +159,7 @@ int main(int args, char* argv[]){
 
 
     int output_queue_key=atoi(argv[3]);
-    int output_queue_id=msgget(output_queue_key,IPC_CREAT|0664);
+    output_queue_id=msgget(output_queue_key,IPC_CREAT|0664);
     if(output_queue_id==-1){
         perror("Blad przy tworzeniu kolejki output");
         exit(1);
@@ -224,6 +249,13 @@ int main(int args, char* argv[]){
             msgrcv(game_queue_id, &message, sizeof(message.game_data), 0, 0);
             if (message.mtype == KONIEC || message.mtype == ZAKONCZ) {
                 msgsnd(output_queue_id, &message, sizeof(message.game_data), 0);
+
+                sleep(1);
+
+                msgctl(game_queue_id,IPC_RMID,0);
+                msgctl(output_queue_id,IPC_RMID,0);
+
+                //popelniam sudoku
                 kill(0, SIGKILL);
             }
             else if (message.mtype == ATAK || message.mtype == TWORZ || message.mtype == PODDAJSIE) {

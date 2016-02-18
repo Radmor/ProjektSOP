@@ -110,8 +110,6 @@ void koniec(int sleep_time,int queue_id){
 
 int main(int args, char* argv[]){
 
-    srand(time(0));
-
 
     if(args<2){
         printf("NIEWLASCIWA LICZBA ARGUMENTOW\n");
@@ -191,11 +189,11 @@ int main(int args, char* argv[]){
             printf("PODDALES SIE\nPROGRAM ZAKONCZY SIE ZA 3 SEKUNDY\n");
             koniec(3,game_queue_id);
         }
-        else{
+        /*else{
             printf("DZIWNA WIADOMOSC\n");
             printf("%ld\n",message.mtype);
 
-        }
+        }*/
 
     }
 
