@@ -108,14 +108,23 @@ void koniec(int sleep_time,int queue_id){
 /* koniec funkcji */
 
 
-int main(int args, char argv[]){
+int main(int args, char* argv[]){
 
     srand(time(0));
 
-    printf("PODAJ ID KOLEJKI\n");
 
-    int game_queue_id;
-    scanf("%d",&game_queue_id);
+    if(args<2){
+        printf("NIEWLASCIWA LICZBA ARGUMENTOW\n");
+        exit(1);
+    }
+
+    int game_queue_key=atoi(argv[1]);
+
+    int game_queue_id=msgget(game_queue_key,IPC_CREAT|0664);
+    if(game_queue_id==-1){
+        perror("BLAD PRZY TWORZENIU KOLEJKI GRY");
+        exit(1);
+    }
 
     Game_message message;
     Init_message init_message;
@@ -183,6 +192,7 @@ int main(int args, char argv[]){
             koniec(3,game_queue_id);
         }
         else{
+            printf("DZIWNA WIADOMOSC\n");
             printf("%ld\n",message.mtype);
 
         }

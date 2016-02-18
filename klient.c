@@ -93,41 +93,47 @@ void show_player(Game_data_struct player){
 /* koniec funkcji */
 
 
-int main(int args, char argv[]){
+int main(int args, char* argv[]){
 
     srand(time(0));
 
     printf("OCZEKIWANIE NA DRUGIEGO GRACZA\n");
 
-    int init_queue_id=msgget(INIT_QUEUE_KEY,IPC_CREAT|0664);
-    int id_gracza=rand()%100000;
+    /* SPRAWDZANIE POPRAWNOSCI ARGUMENTOW */
+
+    if(args<4){
+        printf("NIEWLASCIWA LICZBA ARGUMENTOW\n");
+        exit(1);
+    }
+
+    int init_queue_key=atoi(argv[1]);
+    int id_gracza=atoi(argv[2]);
+
+    int init_queue_id=msgget(init_queue_key,IPC_CREAT|0664);
+    if(init_queue_id==-1){
+        perror("BLAD STWORZENIA KOLEJKI INIT");
+        exit(1);
+    }
+
+
 
     Init_message init_message;
     init_message.mtype=ROZPOCZNIJ;
     init_message.init_data.id_gracza=id_gracza;
-
-    Game_message game_message;
-
     msgsnd(init_queue_id,&init_message,sizeof(init_message.init_data),0);
-
-    /*while(1) {
-        msgrcv(init_queue_id,&init_message, sizeof(init_message.init_data),AKCEPTUJ,0);
-        if(init_message.init_data.id_gracza!=id_gracza) {
-            msgsnd(init_queue_id,&init_message, sizeof(init_message.init_data),0);
-        }
-        else {
-            break;
-        }
-
-    }
-    */
 
     msgrcv(init_queue_id,&init_message, sizeof(init_message.init_data),AKCEPTUJ,0);
 
+    int game_queue_key=init_message.init_data.id_kolejki_kom;
 
-    int output_queue_key=rand()%4000;
+    int game_queue_id=msgget(game_queue_key,IPC_CREAT|0664);
+    if(game_queue_id==-1){
+        perror("Blad przy otwarciu kolejki do komunikacji");
+        exit(1);
+    }
 
-    int game_queue_id=init_message.init_data.id_kolejki_kom;
+
+    int output_queue_key=atoi(argv[3]);
     int output_queue_id=msgget(output_queue_key,IPC_CREAT|0664);
     if(output_queue_id==-1){
         perror("Blad przy tworzeniu kolejki output");
@@ -135,6 +141,7 @@ int main(int args, char argv[]){
     }
 
     init_message.mtype=ID;
+    init_message.init_data.id_gracza=id_gracza;
     msgsnd(output_queue_id,&init_message, sizeof(init_message.init_data),0);
 
     if(fork()==0){
