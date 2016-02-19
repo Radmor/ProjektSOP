@@ -124,10 +124,8 @@ void interrupt(){
 void flush_input(FILE *in)
 {
     int c;
-
     while ((c=fgetc(in))!=EOF && c!='\n')
         ;
-
     clearerr (in);
 }
 
@@ -207,19 +205,16 @@ int main(int args, char* argv[]){
 
         while(1){
             printf("\033[2J\033[1;1H");
-            //printf("ID TWOJEJ KOLEJKI TO: %d\n",output_queue_id);
             printf("ID GRACZA TO: %d\n",id_gracza);
             printf("WYBIERZ AKCJE:\n1-trening jednostek\n2-atak\n3-poddaj sie\n\n");
-            //scanf("%d",&decyzja);
 
+            /* Pobranie komendy */
             decyzja=fgetc (stdin);
-
+            /* Usuniecie pozostalosci w stdin */
             flush_input(stdin);
-
 
             if(decyzja=='1') {
 
-                //fseek(stdin,0,SEEK_END);
                 printf("Wybierz liczbe jednostek lekkiej piechoty\n");
                 fgets (buffer, MAX, stdin);
                 train_list.light_infantry=(int)strtol(buffer,NULL,0);
