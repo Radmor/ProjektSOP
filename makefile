@@ -1,9 +1,9 @@
-all: klient serwer klient_output
+all: klient serwer stan
 
 klient: klient.c
-	gcc -o klient klient.c
+	gcc -Wall klient.c -o klient
 
 serwer: serwer.c
-	gcc -o serwer serwer.c -lm
-klient_output: klient_output.c
-	gcc -o klient_output klient_output.c
+	gcc -Wall serwer.c -lm -o serwer
+stan: stan.c
+	gcc -Wall stan.c -o stan

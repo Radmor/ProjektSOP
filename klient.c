@@ -203,12 +203,7 @@ int main(int args, char* argv[]){
         char decyzja;
 
         char buffer[MAX]="";
-        char character;
-        char temp;
-        int position;
 
-        int wynik;
-        int tekst;
 
         while(1){
             printf("\033[2J\033[1;1H");
@@ -306,5 +301,4 @@ int main(int args, char* argv[]){
         }
 
     }
-    return 0;
 }

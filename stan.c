@@ -38,7 +38,6 @@
 
 /* key kolejek */
 
-#define INIT_QUEUE_KEY 2137
 #define GR1_QUEUE_KEY 1
 #define GR2_QUEUE_KEY 2
 
@@ -78,13 +77,12 @@ typedef struct Init_message {
 
 void show_player(Game_data_struct player){
 
-    printf("\n");
-    printf("Statystyki gracza\n\n");
-    printf("Lekka piechota: %d\n",player.light_infantry);
+    printf("Statystyki gracza\n");
+    printf("Lekka piechota: %d\t",player.light_infantry);
     printf("Ciezka piechota: %d\n",player.heavy_infantry);
-    printf("Jazda: %d\n",player.cavalry);
+    printf("Jazda: %d\t\t",player.cavalry);
     printf("Robotnicy: %d\n",player.workers);
-    printf("Surowce: %d\n",player.stocks);
+    printf("Surowce: %d\t\t",player.stocks);
     printf("Punkty zwyciestwa: %d\n",player.victory_points);
     printf("\n");
 }
@@ -111,6 +109,7 @@ void koniec(int sleep_time,int queue_id){
 int main(int args, char* argv[]){
 
 
+
     if(args<2){
         printf("NIEWLASCIWA LICZBA ARGUMENTOW\n");
         exit(1);
@@ -123,6 +122,7 @@ int main(int args, char* argv[]){
         perror("BLAD PRZY TWORZENIU KOLEJKI GRY");
         exit(1);
     }
+
 
     Game_message message;
     Init_message init_message;
@@ -138,11 +138,11 @@ int main(int args, char* argv[]){
         }
         else if(message.mtype==BLEDNY_ATAK){
             printf("\033[2J\033[1;1H");
-            printf("WYKONALES BLEDNY ATAK");
+            printf("WYKONALES BLEDNY ATAK\n");
         }
         else if(message.mtype==NIEDOST_SUROWCE){
             printf("\033[2J\033[1;1H");
-            printf("NIE MASZ WYSTARCZAJACEJ ILOSCI SUROWCOW");
+            printf("NIE MASZ WYSTARCZAJACEJ ILOSCI SUROWCOW\n");
         }
         else if(message.mtype==SKUTECZNY_ATAK){
             printf("\033[2J\033[1;1H");
@@ -189,13 +189,5 @@ int main(int args, char* argv[]){
             printf("PODDALES SIE\nPROGRAM ZAKONCZY SIE ZA 3 SEKUNDY\n");
             koniec(3,game_queue_id);
         }
-        /*else{
-            printf("DZIWNA WIADOMOSC\n");
-            printf("%ld\n",message.mtype);
-
-        }*/
-
     }
-
-    return 0;
 }

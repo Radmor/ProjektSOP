@@ -502,7 +502,6 @@ int war(Game_data_struct *attacker,Game_data_struct *defenser,Game_data_struct *
 void conflict(Game_data_struct *attacker,Game_data_struct *defenser,Game_data_struct *battle_list,int attacker_queue_id,int defenser_queue_id,int semaphore_id,int semnum,int *endgame,int semaphore_id_endgame,int semnum_endgame){
 
 
-    Game_message message;
     Game_message attack_error_message;
     attack_error_message.mtype=BLEDNY_ATAK;
 
@@ -810,8 +809,8 @@ int main(int args, char* argv[]){
     Game_data_struct train_list;
     Game_data_struct *train_list_pointer=&train_list;
 
-    init_clear(player1,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
-    init_clear(player2,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
+    init_player(player1,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
+    init_player(player2,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
     init_clear(train_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
 
 
