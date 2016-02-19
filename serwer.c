@@ -972,9 +972,9 @@ int main(int args, char* argv[]){
 
                         msgrcv(gr1_queue_id,&game_message, sizeof(game_message.game_data),PODDAJSIE,0);
 
-                        //semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
+                        semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
                         *winner=player2_id;
-                        //semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
+                        semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
 
                         semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
                         *endgame=1;
@@ -1009,9 +1009,9 @@ int main(int args, char* argv[]){
 
                         msgrcv(gr2_queue_id,&game_message, sizeof(game_message.game_data),PODDAJSIE,0);
 
-                        //semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
+                        semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
                         *winner=player1_id;
-                        //semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
+                        semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
 
 
                         semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
