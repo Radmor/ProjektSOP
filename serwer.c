@@ -755,8 +755,7 @@ int main(int args, char* argv[]){
     msgrcv(init_queue_id,&init_message1,sizeof(init_message1.init_data),ROZPOCZNIJ,0);
     int player1_id=init_message1.init_data.id_gracza;
     printf("POJAWIENIE SIE GRACZA 1\n");
-    msgrcv(init_queue_id,&init_message2,sizeof(init_message1.init_data),ROZPOCZNIJ,0);
-    int player2_id=init_message2.init_data.id_gracza;
+
 
 
     /* utworzenie kolejki komunikatow gracza1 */
@@ -767,6 +766,13 @@ int main(int args, char* argv[]){
         exit(1);
     }
 
+
+    init_message1.mtype=AKCEPTUJ;
+    init_message1.init_data.id_kolejki_kom=GR1_QUEUE_KEY;
+
+    msgrcv(init_queue_id,&init_message2,sizeof(init_message1.init_data),ROZPOCZNIJ,0);
+    int player2_id=init_message2.init_data.id_gracza;
+
     /* utworzenie kolejki komunikatow gracza2 */
 
     gr2_queue_id=msgget(GR2_QUEUE_KEY,IPC_CREAT|0664);
@@ -775,9 +781,6 @@ int main(int args, char* argv[]){
         exit(1);
     }
 
-
-    init_message1.mtype=AKCEPTUJ;
-    init_message1.init_data.id_kolejki_kom=GR1_QUEUE_KEY;
 
     init_message2.mtype=AKCEPTUJ;
     init_message2.init_data.id_kolejki_kom=GR2_QUEUE_KEY;
