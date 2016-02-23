@@ -28,6 +28,8 @@
 #define STRATY_ATAK         12
 #define STRATY_OBRONA       13
 #define PODDAJSIE           14
+#define ZAPYTANIE           16
+#define ODPOWIEDZ           17
 
 /* typy komunikatow miedzy klientem a outputem */
 #define ID 15
@@ -235,6 +237,7 @@ int main(int args, char* argv[]){
                 msgsnd(game_queue_id,&train_message, sizeof(train_message.game_data),0);
                 printf("WYSLANO POLECENIE TRENINGU\n");
             }
+
             else if(decyzja=='2') {
                 printf("Wybierz liczbe jednostek lekkiej piechoty\n");
                 fgets (buffer, MAX, stdin);
@@ -271,8 +274,12 @@ int main(int args, char* argv[]){
     else {
 
         Game_message message;
+        Game_message response_message;
+        response_message.mtype=ODPOWIEDZ;
 
         msgsnd(output_queue_id, &message, sizeof(message.game_data), 0);
+
+
 
         while (1) {
             msgrcv(game_queue_id, &message, sizeof(message.game_data), 0, 0);
@@ -288,6 +295,9 @@ int main(int args, char* argv[]){
             }
             else if (message.mtype == ATAK || message.mtype == TWORZ || message.mtype == PODDAJSIE) {
                 msgsnd(game_queue_id, &message, sizeof(message.game_data), 0);
+            }
+                else if(message.mtype==ZAPYTANIE){
+                msgsnd(game_queue_id,&response_message, sizeof(response_message.game_data),0);
             }
             else {
                 msgsnd(output_queue_id, &message, sizeof(message.game_data), 0);
