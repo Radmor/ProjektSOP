@@ -80,7 +80,7 @@
 
 
 /* consty dotyczace pidow */
-#define PIDS_QUANTITY 8
+#define PIDS_QUANTITY 9
 #define STOCKS_PID 0
 #define PLAYER1_ATTACK_PID 1
 #define PLAYER2_ATTACK_PID 2
@@ -89,6 +89,7 @@
 #define STATE_PID 5
 #define PLAYER1_SURRENDER_PID 6
 #define PLAYER2_SURRENDER_PID 7
+#define CONTROL_PID 8
 
 
 
@@ -803,17 +804,30 @@ int main(int args, char* argv[]){
     init_clear(train_list_pointer,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
 
 
-    if(fork()==0){  //pobieranie surowcow
-        int pid=getpid();
-        if(pid==-1){
-            perror("Blad przy pobieraniu STOCKS_PID");
-        }
-        pids[STOCKS_PID]=pid;
+    if(fork()==0){
+        if(fork()==0){//pobieranie surowcow
+            int pid=getpid();
+            if(pid==-1){
+                perror("Blad przy pobieraniu STOCKS_PID");
+            }
+            pids[STOCKS_PID]=pid;
 
-        while(1){
-            add_stocks(player1,player2,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
-            sleep(1);
+            while(1){
+                add_stocks(player1,player2,shared_memory_semaphore_id,SHARED_MEMORY_SEMAPHORE_NUM);
+                sleep(1);
+            }
         }
+        else{
+            int pid=getpid();
+            if(pid==-1){
+                perror("Blad przy pobieraniu CONTROL_PID");
+            }
+            pids[CONTROL_PID]=pid;
+
+            /* tutaj ogarniecie sprawdzania */
+
+        }
+
 
     }
     else{
