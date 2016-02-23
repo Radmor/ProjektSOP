@@ -27,6 +27,8 @@
 #define STRATY_ATAK         12
 #define STRATY_OBRONA       13
 #define PODDAJSIE           14
+#define ZAPYTANIE           16
+#define ODPOWIEDZ           17
 
 /* typy komunikatow miedzy klientem a outputem */
 #define ID 15
