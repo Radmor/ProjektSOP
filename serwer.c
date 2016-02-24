@@ -51,13 +51,27 @@
 #define SHARED_MEMORY_PLAYER2_SEMAPHORE_NUM 2
 #define SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM 3
 #define SHARED_MEMORY_WINNER_SEMAPHORE_NUM 4
-#define SHARED_MEMORY_MESSAGES_SEMAPHORE_NUM 5
 
 #define SHARED_MEMORY_SEMAPHORE_INIT 1
 #define SHARED_MEMORY_PLAYER1_SEMAPHORE_INIT 1
 #define SHARED_MEMORY_PLAYER2_SEMAPHORE_INIT 1
 #define SHARED_MEMORY_ENDGAME_SEMAPHORE_INIT 1
 #define SHARED_MEMORY_WINNER_SEMAPHORE_INIT 1
+
+
+
+#define MESSAGES_SEMAPHORE_KEY 169
+#define MESSAGES_SEMAPHORE_QUANTITY 2
+
+#define MESSAGES1_SEMAPHORE_NUM 0
+#define MESSAGES2_SEMAPHORE_NUM 1
+
+#define MESSAGES1_SEMAPHORE_INIT 1
+#define MESSAGES2_SEMAPHORE_INIT 1
+
+
+
+
 #define SHARED_MEMORY_MESSAGES_SEMAPHORE_INIT 1
 
 /* key pamieci wspoldzielonej */
@@ -66,7 +80,8 @@
 #define SHARED_MEMORY_ENDGAME_KEY 87
 #define SHARED_MEMORY_PIDS_KEY 665
 #define SHARED_MEMORY_WINNER_KEY 78
-#define SHARED_MEMORY_MESSAGES_KEY 98
+#define SHARED_MEMORY_MESSAGES1_KEY 98
+#define SHARED_MEMORY_MESSAGES2_KEY 100
 
 /* consty dotycace dodawania surowcow */
 
@@ -82,7 +97,7 @@
 #define INFO_FREQUENCY 4
 #define ENDGAME_CHECK_FREQUENCY 2
 #define SIGKILL 9
-#define CONTROL_FREQUENCY 200
+#define CONTROL_FREQUENCY 1
 
 
 /* consty dotyczace pidow */
@@ -97,8 +112,8 @@
 #define PLAYER2_SURRENDER_PID 7
 #define CONTROL1_PID 8
 #define RECEIVE1_PID 9
-#define CONTROL1_PID 10
-#define RECEIVE1_PID 11
+#define CONTROL2_PID 10
+#define RECEIVE2_PID 11
 
 
 
@@ -622,7 +637,7 @@ int main(int args, char* argv[]){
 
     /* SEMAFORY */
 
-    /* utworzenie i inicjalizacja semaforow */
+    /* utworzenie i inicjalizacja semafora */
 
     int shared_memory_semaphore_id=semget(SEMAPHORE_KEY,SEMAPHORE_QUANTITY,IPC_CREAT|0664);
     if(shared_memory_semaphore_id==-1){
@@ -665,11 +680,28 @@ int main(int args, char* argv[]){
         exit(1);
     }
 
-    /* Inicjalizacja semafora 5 */
-    if(semctl(shared_memory_semaphore_id,SHARED_MEMORY_MESSAGES_SEMAPHORE_NUM,SETVAL,SHARED_MEMORY_MESSAGES_SEMAPHORE_INIT)==-1){
+    /* Utworzenie semafora dla messages */
+
+
+    int messages_semaphore_id=semget(MESSAGES_SEMAPHORE_KEY,MESSAGES_SEMAPHORE_QUANTITY,IPC_CREAT|0664);
+    if(messages_semaphore_id==-1){
+        perror("Blad przy tworzeniu semafora dla wiadomosci");
+    }
+
+    /* Inicjalizacja dla semafora messages 1 */
+
+    if(semctl(messages_semaphore_id,MESSAGES1_SEMAPHORE_NUM,SETVAL,MESSAGES1_SEMAPHORE_INIT)==-1){
+        perror("Blad przy inicjalizacji semafora 5 pamieci wspldzielonej");
+        exit(1);
+    }
+
+    /* Inicjalizacja dla semafora messages 2 */
+
+    if(semctl(messages_semaphore_id,MESSAGES2_SEMAPHORE_NUM,SETVAL,MESSAGES2_SEMAPHORE_INIT)==-1){
         perror("Blad przy inicjalizacji semafora 5 pamieci wspoldzielonej");
         exit(1);
     }
+
 
 
     /* PAMIECI WSPOLDZIELONE */
@@ -749,16 +781,30 @@ int main(int args, char* argv[]){
         exit(1);
     }
 
-    /* Utworzenie i przylaczenie pamieci wspoldzielonej messages */
+    /* Utworzenie i przylaczenie pamieci wspoldzielonej messages1 */
 
-    int shared_memory_messages_id=shmget(SHARED_MEMORY_MESSAGES_KEY,sizeof(int),IPC_CREAT|0664);
-    if(shared_memory_messages_id==-1){
+    int shared_memory_messages1_id=shmget(SHARED_MEMORY_MESSAGES1_KEY,sizeof(int),IPC_CREAT|0664);
+    if(shared_memory_messages1_id==-1){
         perror("Blad przy tworzeniu pamieci wspoldzielonej messages");
         exit(1);
     }
 
-    int *messages=(int*) shmat(shared_memory_messages_id,NULL,0);
-    if(messages==NULL){
+    int *messages1=(int*) shmat(shared_memory_messages1_id,NULL,0);
+    if(messages1==NULL){
+        perror("Blad przy przylaczeniu pamieci wspoldzilonej messages");
+        exit(1);
+    }
+
+    /* Utworzenie i przylaczenie pamieci wspoldzielonej messages2 */
+
+    int shared_memory_messages2_id=shmget(SHARED_MEMORY_MESSAGES2_KEY,sizeof(int),IPC_CREAT|0664);
+    if(shared_memory_messages2_id==-1){
+        perror("Blad przy tworzeniu pamieci wspoldzielonej messages");
+        exit(1);
+    }
+
+    int *messages2=(int*) shmat(shared_memory_messages2_id,NULL,0);
+    if(messages2==NULL){
         perror("Blad przy przylaczeniu pamieci wspoldzilonej messages");
         exit(1);
     }
@@ -859,25 +905,38 @@ int main(int args, char* argv[]){
                     Game_message message;
                     message.mtype=ZAPYTANIE;
 
-                    semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_MESSAGES_SEMAPHORE_NUM);
-                    *messages=0;
-                    semaphore_up(shared_memory_messages_id,SHARED_MEMORY_MESSAGES_SEMAPHORE_NUM);
+
+                    semaphore_down(messages_semaphore_id,MESSAGES1_SEMAPHORE_NUM);
+                    *messages1=0;
+
+                    semaphore_up(messages_semaphore_id,MESSAGES1_SEMAPHORE_NUM);
+
+                    int koniecgry;
 
                     do{
-                        usleep(CONTROL_FREQUENCY);
-                        semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_MESSAGES_SEMAPHORE_NUM);
-                        if(*messages==2){
+                        sleep(CONTROL_FREQUENCY);
+
+                        semaphore_down(messages_semaphore_id,MESSAGES1_SEMAPHORE_NUM);
+
+                        //printf("%d\n",*messages1);
+                        if(*messages1==1){
                             semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
                             *winner=player2_id;
-                            semaphore_up(shared_memory_messages_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
+                            semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
 
-                            semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_MESSAGES_SEMAPHORE_NUM);
+                            semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
                             *endgame=1;
-                            semaphore_up(shared_memory_messages_id,SHARED_MEMORY_MESSAGES_SEMAPHORE_NUM);
+                            semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
+
+                            printf("GRACZ 1 NIE ODPOWIADA\n");
+
                         }
-                        semaphore_up(shared_memory_messages_id,SHARED_MEMORY_MESSAGES_SEMAPHORE_NUM);
+                        semaphore_up(messages_semaphore_id,MESSAGES1_SEMAPHORE_NUM);
 
                         msgsnd(gr1_queue_id,&message,sizeof(message.game_data),0);
+                        semaphore_down(messages_semaphore_id,MESSAGES1_SEMAPHORE_NUM);
+                        *messages1=*messages1+1;
+                        semaphore_up(messages_semaphore_id,MESSAGES1_SEMAPHORE_NUM);
 
                         semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
                         koniecgry=*endgame;
@@ -898,14 +957,80 @@ int main(int args, char* argv[]){
                     while(1){
                         msgrcv(gr1_queue_id,&message,sizeof(message.game_data),ODPOWIEDZ,0);
 
-                        semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_MESSAGES_SEMAPHORE_NUM);
-                        *messages=0;
-                        semaphore_up(shared_memory_messages_id,SHARED_MEMORY_MESSAGES_SEMAPHORE_NUM);
+                        semaphore_down(messages_semaphore_id,MESSAGES1_SEMAPHORE_NUM);
+                        *messages1=0;
+                        semaphore_up(messages_semaphore_id,MESSAGES1_SEMAPHORE_NUM);
                     }
                 }
             }
             else{ //CZY ZYJE GRACZ 2
+                if(fork()==0){
+                int pid=getpid();
+                if(pid==-1){
+                    perror("Blad przy pobieraniu CONTROL_PID");
+                }
+                pids[CONTROL2_PID]=pid;
 
+                Game_message message;
+                message.mtype=ZAPYTANIE;
+
+
+                semaphore_down(messages_semaphore_id,MESSAGES2_SEMAPHORE_NUM);
+                *messages1=0;
+
+                semaphore_up(messages_semaphore_id,MESSAGES2_SEMAPHORE_NUM);
+
+                int koniecgry;
+
+                do{
+                    sleep(CONTROL_FREQUENCY);
+
+                    semaphore_down(messages_semaphore_id,MESSAGES2_SEMAPHORE_NUM);
+
+                    //printf("%d\n",*messages1);
+                    if(*messages2==1){
+                        semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
+                        *winner=player1_id;
+                        semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
+
+                        printf("GRACZ 2 NIE ODPOWIADA\n");
+
+                        semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
+                        *endgame=1;
+                        semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
+
+                    }
+                    semaphore_up(messages_semaphore_id,MESSAGES2_SEMAPHORE_NUM);
+
+                    msgsnd(gr2_queue_id,&message,sizeof(message.game_data),0);
+                    semaphore_down(messages_semaphore_id,MESSAGES2_SEMAPHORE_NUM);
+                    *messages2=*messages2+1;
+                    semaphore_up(messages_semaphore_id,MESSAGES2_SEMAPHORE_NUM);
+
+                    semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
+                    koniecgry=*endgame;
+                    semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_ENDGAME_SEMAPHORE_NUM);
+                }while(koniecgry==0);
+
+
+            }else{
+                int pid=getpid();
+                if(pid==-1){
+                    perror("Blad przy pobieraniu CONTROL_PID");
+                }
+                pids[RECEIVE2_PID]=pid;
+
+                Game_message message;
+
+
+                while(1){
+                    msgrcv(gr2_queue_id,&message,sizeof(message.game_data),ODPOWIEDZ,0);
+
+                    semaphore_down(messages_semaphore_id,MESSAGES2_SEMAPHORE_NUM);
+                    *messages2=0;
+                    semaphore_up(messages_semaphore_id,MESSAGES2_SEMAPHORE_NUM);
+                }
+            }
 
             }
 
