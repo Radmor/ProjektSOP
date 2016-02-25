@@ -97,8 +97,9 @@
 #define INFO_FREQUENCY 4
 #define ENDGAME_CHECK_FREQUENCY 2
 #define SIGKILL 9
-#define CONTROL_FREQUENCY 1
-
+#define CONTROL_FREQUENCY 250000
+#define INIT_CONTROL_WAIT 500000
+#define MESSAGES_QUANTITY_ERROR 2
 
 /* consty dotyczace pidow */
 #define PIDS_QUANTITY 12
@@ -911,15 +912,17 @@ int main(int args, char* argv[]){
 
                     semaphore_up(messages_semaphore_id,MESSAGES1_SEMAPHORE_NUM);
 
+                    usleep(INIT_CONTROL_WAIT);
+
                     int koniecgry;
 
                     do{
-                        sleep(CONTROL_FREQUENCY);
+                        usleep(CONTROL_FREQUENCY);
 
                         semaphore_down(messages_semaphore_id,MESSAGES1_SEMAPHORE_NUM);
 
                         //printf("%d\n",*messages1);
-                        if(*messages1==1){
+                        if(*messages1>=MESSAGES_QUANTITY_ERROR){
                             semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
                             *winner=player2_id;
                             semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
@@ -982,13 +985,15 @@ int main(int args, char* argv[]){
 
                 int koniecgry;
 
+                    usleep(INIT_CONTROL_WAIT);
+
                 do{
-                    sleep(CONTROL_FREQUENCY);
+                    usleep(CONTROL_FREQUENCY);
 
                     semaphore_down(messages_semaphore_id,MESSAGES2_SEMAPHORE_NUM);
 
                     //printf("%d\n",*messages1);
-                    if(*messages2==1){
+                    if(*messages2>=MESSAGES_QUANTITY_ERROR){
                         semaphore_down(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
                         *winner=player1_id;
                         semaphore_up(shared_memory_semaphore_id,SHARED_MEMORY_WINNER_SEMAPHORE_NUM);
